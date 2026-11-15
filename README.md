@@ -1,32 +1,49 @@
-# React + TypeScript + Vite
+# Dex Lab
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+Montador de time e comparador de Pokémon, feito com dados da [PokéAPI](https://pokeapi.co).
 
-Currently, two official plugins are available:
+## O que faz
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+### Aba Time
 
-## React Compiler
+Você escolhe até seis Pokémon e o app mostra:
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+- a **tabela de fraquezas**, com o dano de cada tipo de ataque em cada membro;
+- os **pontos fracos** do time, que são os tipos de ataque que pegam mais gente fraca do que protegida;
+- a **cobertura de ataque**, com quais tipos os golpes do mesmo tipo do time acertam super efetivo;
+- uma **sugestão** de tipo para o próximo membro.
 
-## Expanding the Oxlint configuration
+### Aba Comparar
 
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
+Você coloca de dois a quatro Pokémon lado a lado e compara:
 
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+- os status base, com o maior valor destacado;
+- o total;
+- habilidades, incluindo as ocultas;
+- altura, peso e cadeia de evolução.
+
+### Compartilhar
+
+O time e a comparação ficam salvos no navegador e no link (`?time=6,9,3`). É só mandar a URL.
+
+### Tema
+
+Tem tema claro e escuro. Por padrão, segue o do sistema.
+
+## Referências de design
+
+- [react-spring.dev](https://www.react-spring.dev/): as manchas de cor desfocadas no fundo, que aqui mudam de cor conforme os tipos do time, e a barra de ícones do menu. As animações de mola também vêm da biblioteca React Spring.
+- [gsap.com](https://gsap.com/): o título grande com as palavras entrando em cascata, os textos entre chaves `{ }` e os botões em pílula com seta num círculo.
+
+## Rodando
+
+```bash
+npm install
+npm run dev
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+Feito com Vite, React 19, TypeScript, Tailwind CSS v4 e React Spring.
+
+---
+
+Projeto de fã, sem fins lucrativos. Pokémon e seus personagens são marcas da Nintendo, Game Freak e Creatures. Este projeto não tem afiliação com eles. Desenvolvido por [Hydra Labs](https://hydra-labs-studio.vercel.app).
