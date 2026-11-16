@@ -1,8 +1,10 @@
 import { animated, useTransition } from "@react-spring/web";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { coverageFromTypes, defenseTable, offensiveCoverage, suggestTypes, teraDefenseTypes } from "@/lib/analysis";
-import { artworkUrl, pokemonName, speciesIdOf, typesInGen, type Pokemon } from "@/lib/pokeapi";
+import { getTypeIndex } from "@/lib/dex";
+import { artworkUrl, getPokemonList, pokemonName, speciesIdOf, typesInGen, type Pokemon, type PokemonRef } from "@/lib/pokeapi";
 import type { Availability } from "@/lib/games";
+import { recommendPokemonForTeam, type RecommendedMon } from "@/lib/recommendations";
 import type { GameContext } from "@/lib/use-game";
 import { usePrefersReducedMotion } from "@/lib/state";
 import { MAX_TEAM, type Member } from "@/lib/team";
@@ -94,6 +96,16 @@ export function TeamTab({ members, team, pending, onAdd, onRemove, onClear, onUp
           onRemove={() => onRemove(current.id)}
           onOpenSummary={() => onOpen(speciesIdOf(currentPokemon), currentPokemon.id)}
           game={game.game}
+        />
+      )}
+
+      {ids.length < MAX && (
+        <TeamRecommendations
+          team={team}
+          teamIds={ids}
+          game={game}
+          onAdd={add}
+          onOpen={onOpen}
         />
       )}
 
@@ -270,6 +282,193 @@ function EmptyHint() {
     <p className="py-6 text-center text-muted">
       <span className="braces text-lg">Adicione o primeiro Pokémon e a análise aparece aqui</span>
     </p>
+  );
+}
+
+type RoleFilter = "todos" | "inicial" | "destaque" | "lendário";
+
+const ROLE_TABS: { id: RoleFilter; label: string }[] = [
+  { id: "todos", label: "Melhores opções" },
+  { id: "inicial", label: "Iniciais" },
+  { id: "destaque", label: "Destaques" },
+  { id: "lendário", label: "Lendários" },
+];
+
+/**
+ * Sugestão de Pokémon reais do jogo atual para começar ou fechar o time:
+ * - Quando o time está vazio, mostra iniciais evoluídos e destaques daquele jogo;
+ * - Quando já há membros, calcula quem melhor cobre as fraquezas e lacunas ofensivas do time.
+ */
+function TeamRecommendations({
+  team,
+  teamIds,
+  game,
+  onAdd,
+  onOpen,
+}: {
+  team: Pokemon[];
+  teamIds: number[];
+  game: GameContext;
+  onAdd: (id: number) => void;
+  onOpen: (speciesId: number, formId?: number) => void;
+}) {
+  const [list, setList] = useState<PokemonRef[] | null>(null);
+  const [typeIndex, setTypeIndex] = useState<Record<number, TypeName[]> | null>(null);
+  const [roleFilter, setRoleFilter] = useState<RoleFilter>("todos");
+
+  useEffect(() => {
+    let alive = true;
+    getPokemonList()
+      .then((l) => alive && setList(l))
+      .catch(() => {});
+    getTypeIndex()
+      .then((ti) => alive && setTypeIndex(ti))
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  const teamTypes = useMemo(() => team.map((p) => ({ types: typesInGen(p, game.gen) })), [team, game.gen]);
+
+  const recommendations = useMemo(() => {
+    if (!list || !typeIndex) return null;
+    // Se o jogo oficial ainda está carregando a Pokédex dele, aguarda para não sugerir quem não está no jogo.
+    if (game.game?.kind === "official" && !game.species) return null;
+    return recommendPokemonForTeam({
+      list,
+      typeIndex,
+      teamTypes,
+      teamIds,
+      gen: game.gen,
+      check: game.check,
+      includeLegendaries: roleFilter === "lendário",
+      filterRole: roleFilter,
+      limit: 6,
+    });
+  }, [list, typeIndex, teamTypes, teamIds, game, roleFilter]);
+
+  const gameLabel = game.game ? game.game.label : "todos os jogos";
+
+  return (
+    <Card>
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <SectionHeading
+          kicker={`Sugestões · ${game.game ? game.game.label : "Time livre"}`}
+          title={team.length === 0 ? "Bons Pokémon para começar" : "Bons Pokémon para fechar o time"}
+        >
+          {team.length === 0
+            ? `Iniciais evoluídos e destaques disponíveis em ${gameLabel}. Clique no + para adicionar ao time.`
+            : `Pokémon disponíveis em ${gameLabel} que melhor cobrem as fraquezas e a cobertura do seu time atual.`}
+        </SectionHeading>
+
+        <div role="tablist" aria-label="Filtrar sugestões" className="flex flex-wrap gap-1 rounded-2xl border border-line p-1">
+          {ROLE_TABS.map((t) => (
+            <button
+              key={t.id}
+              role="tab"
+              type="button"
+              aria-selected={roleFilter === t.id}
+              onClick={() => setRoleFilter(t.id)}
+              className={`rounded-xl px-3 py-1.5 text-xs font-semibold transition-colors sm:text-sm ${
+                roleFilter === t.id ? "bg-ink text-bg" : "text-muted hover:bg-line/60 hover:text-ink"
+              }`}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {!recommendations ? (
+        <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+          {Array.from({ length: 6 }, (_, i) => (
+            <div key={i} className="aspect-[3/4] animate-pulse rounded-2xl border border-line bg-line/40" />
+          ))}
+        </div>
+      ) : recommendations.length === 0 ? (
+        <p className="mt-4 text-sm text-muted">Nenhuma sugestão encontrada nesta categoria para este jogo.</p>
+      ) : (
+        <ul className="mt-4 grid grid-cols-2 gap-2.5 sm:grid-cols-3 sm:gap-3 lg:grid-cols-6">
+          {recommendations.map((rec) => (
+            <RecommendationCard
+              key={rec.id}
+              rec={rec}
+              emptyTeam={team.length === 0}
+              onAdd={() => onAdd(rec.id)}
+              onOpen={() => onOpen(rec.dexNumber)}
+            />
+          ))}
+        </ul>
+      )}
+    </Card>
+  );
+}
+
+function RecommendationCard({
+  rec,
+  emptyTeam,
+  onAdd,
+  onOpen,
+}: {
+  rec: RecommendedMon;
+  emptyTeam: boolean;
+  onAdd: () => void;
+  onOpen: () => void;
+}) {
+  const name = pokemonName(rec.name);
+  const color = TYPE_INFO[rec.types[0]].color;
+  const reason = emptyTeam
+    ? rec.role === "inicial"
+      ? "Inicial evoluído"
+      : rec.role === "lendário"
+        ? "Lendário / Mítico"
+        : "Destaque do jogo"
+    : rec.resists.length > 0
+      ? `Defende: ${rec.resists.slice(0, 2).map((t) => TYPE_INFO[t].pt).join(", ")}`
+      : rec.covers.length > 0
+        ? `Acerta: ${rec.covers.slice(0, 2).map((t) => TYPE_INFO[t].pt).join(", ")}`
+        : "Ótimo status base";
+
+  return (
+    <li className="group relative">
+      <button
+        type="button"
+        onClick={onOpen}
+        aria-label={`Ver resumo de ${name}`}
+        className="flex aspect-[3/4] w-full flex-col items-center justify-end overflow-hidden rounded-2xl border border-line bg-surface-solid p-2.5 text-center transition duration-300 hover:-translate-y-1 hover:border-ink sm:p-3"
+        style={{ backgroundImage: `radial-gradient(100% 65% at 50% 30%, ${color}38, transparent 70%)` }}
+      >
+        <img
+          src={artworkUrl(rec.id)}
+          alt=""
+          width={120}
+          height={120}
+          loading="lazy"
+          className="mb-auto w-[72%] drop-shadow-[0_8px_12px_rgb(0_0_0/0.18)] transition-transform duration-500 group-hover:scale-110"
+        />
+        <span className="font-mono text-[10px] text-muted">#{String(rec.dexNumber).padStart(4, "0")}</span>
+        <span className="w-full truncate font-display text-sm font-bold">{name}</span>
+        <span className="mt-1 flex flex-wrap justify-center gap-1">
+          {rec.types.map((t) => (
+            <TypeBadge key={t} type={t} size="sm" />
+          ))}
+        </span>
+        <span className="mt-1.5 line-clamp-1 w-full rounded-md bg-line/50 px-1.5 py-0.5 text-[10px] font-medium text-muted">
+          {reason}
+        </span>
+      </button>
+
+      <button
+        type="button"
+        onClick={onAdd}
+        aria-label={`Adicionar ${name} ao time`}
+        title={`Adicionar ${name} ao time`}
+        className="absolute top-2 right-2 grid size-7 place-items-center rounded-full border border-line bg-surface-solid/95 text-base font-bold text-ink shadow-xs transition hover:border-ink hover:bg-ink hover:text-bg"
+      >
+        +
+      </button>
+    </li>
   );
 }
 
