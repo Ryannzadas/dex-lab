@@ -1,7 +1,7 @@
-import { useId } from "react";
+import { useEffect, useId, useState } from "react";
 import { CATEGORY_PT, COMMON_ITEMS, TERA_TYPES } from "@/lib/moves";
 import { EV_MAX, EV_TOTAL, finalStats, IV_MAX, NATURES, SHORT_STAT } from "@/lib/natures";
-import { artworkUrl, displayName, pokemonName, type Pokemon, type StatKey } from "@/lib/pokeapi";
+import { artworkUrl, displayName, getHoldableItems, pokemonName, type Pokemon, type StatKey } from "@/lib/pokeapi";
 import type { Member } from "@/lib/team";
 import type { Game } from "@/lib/games";
 import { TYPE_INFO } from "@/lib/types";
@@ -33,6 +33,20 @@ export function MemberEditor({ member, pokemon, onChange, onRemove, onOpenSummar
   const hasTera = !game || game.tera;
   const moveInfos = useMoveInfos(member.moves);
   const display = member.nickname || pokemonName(pokemon.name);
+  const [holdableItems, setHoldableItems] = useState<string[]>(COMMON_ITEMS);
+
+  useEffect(() => {
+    if (!hasItems) return;
+    let alive = true;
+    getHoldableItems()
+      .then((list) => {
+        if (alive && list.length > 0) setHoldableItems([...new Set([...COMMON_ITEMS, ...list])]);
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [hasItems]);
 
   const setMove = (slot: number, name: string) => {
     const moves = [...member.moves];
@@ -143,7 +157,7 @@ export function MemberEditor({ member, pokemon, onChange, onRemove, onOpenSummar
             onChange={(e) => onChange({ item: e.target.value })}
           />
           <datalist id={`${uid}-items`}>
-            {COMMON_ITEMS.map((i) => (
+            {holdableItems.map((i) => (
               <option key={i} value={i} />
             ))}
           </datalist>

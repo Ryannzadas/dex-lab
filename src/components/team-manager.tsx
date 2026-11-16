@@ -1,5 +1,5 @@
 import { useEffect, useId, useState } from "react";
-import { getPokemonList, type Pokemon } from "@/lib/pokeapi";
+import { getPokemonList, spriteUrl, type Pokemon } from "@/lib/pokeapi";
 import { exportShowdown, importShowdown } from "@/lib/showdown";
 import type { TeamsApi } from "@/lib/team";
 import { drawTeamCard } from "@/lib/team-image";
@@ -51,7 +51,24 @@ export function TeamManager({ api, loaded }: { api: TeamsApi; loaded: Pokemon[] 
               t.id === active.id ? "border-ink bg-ink text-bg" : "border-line text-muted hover:border-ink hover:text-ink"
             }`}
           >
-            {t.name}
+            <span className="flex items-center gap-1.5">
+              <span>{t.name}</span>
+              {t.members.length > 0 && (
+                <span className="flex items-center -space-x-1.5" aria-hidden="true">
+                  {t.members.slice(0, 6).map((m, idx) => (
+                    <img
+                      key={`${m.id}-${idx}`}
+                      src={spriteUrl(m.id)}
+                      alt=""
+                      width={24}
+                      height={24}
+                      loading="lazy"
+                      className="size-6 object-contain drop-shadow-sm"
+                    />
+                  ))}
+                </span>
+              )}
+            </span>
             <span className="font-mono text-[11px] opacity-70">{t.members.length}/6</span>
           </button>
         ))}

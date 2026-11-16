@@ -153,10 +153,149 @@ body {
   scrollbar-color: var(--line) transparent;
 }
 
+/* Leque de cartas com som e rugido (trazido da Firma League). */
+.legend-fan {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  list-style: none;
+  margin: 0 auto;
+  padding: 1.25rem 0.25rem 2.25rem;
+  width: 100%;
+  max-width: 100%;
+}
+.legend-fan li {
+  --i: 0;
+  flex: 0 1 auto;
+  min-width: 0;
+  margin-inline: -16px;
+  transform: translateY(calc(var(--abs-i, 0) * 20px)) rotate(calc(var(--i) * 7.5deg));
+  transform-origin: 50% 120%;
+  z-index: var(--z, 10);
+  transition:
+    transform 0.55s cubic-bezier(0.22, 1, 0.36, 1),
+    z-index 0s linear 0.25s;
+}
+.legend-fan li:hover,
+.legend-fan li.armed {
+  transform: translateY(calc(var(--abs-i, 0) * 20px)) rotate(0deg);
+  z-index: 30 !important;
+  transition:
+    transform 0.55s cubic-bezier(0.22, 1, 0.36, 1),
+    z-index 0s;
+}
+.legend-card {
+  display: grid;
+  width: clamp(108px, 12.5vw, 152px);
+  padding: 8px 8px 12px;
+  border-radius: 16px;
+  background: var(--surface-solid);
+  border: 1.5px solid var(--line);
+  box-shadow:
+    inset 0 -5px 0 rgb(0 0 0 / 0.08),
+    0 14px 28px rgb(0 0 0 / 0.16);
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    transform 0.5s cubic-bezier(0.34, 1.4, 0.64, 1),
+    filter 0.35s ease,
+    border-color 0.3s ease,
+    box-shadow 0.35s ease;
+  will-change: transform;
+}
+.legend-fan li.is-center .legend-card {
+  border-color: var(--ink);
+}
+.legend-fan li:hover .legend-card,
+.legend-fan li.armed .legend-card,
+.legend-card:focus-visible {
+  transform: translateY(-16px) scale(1.05);
+  border-color: var(--ink);
+  box-shadow:
+    inset 0 -5px 0 rgb(0 0 0 / 0.12),
+    0 24px 44px rgb(0 0 0 / 0.28);
+}
+.legend-fan:has(li:hover) li:not(:hover) .legend-card,
+.legend-fan.has-armed li:not(.armed) .legend-card {
+  filter: brightness(0.76) saturate(0.85);
+}
+.legend-art {
+  display: block;
+}
+.legend-art img {
+  width: 100%;
+  height: auto;
+  aspect-ratio: 1;
+  object-fit: contain;
+  margin: 4px 0;
+  filter: drop-shadow(0 10px 12px rgb(0 0 0 / 0.28));
+  transition:
+    transform 0.55s cubic-bezier(0.34, 1.5, 0.64, 1),
+    filter 0.45s ease;
+}
+.legend-fan li:hover .legend-art img,
+.legend-fan li.armed .legend-art img {
+  transform: translateY(-5px) scale(1.08);
+  filter: drop-shadow(0 16px 16px rgb(0 0 0 / 0.38));
+  animation: legend-roar 0.5s ease-out 0.15s;
+}
+@keyframes legend-roar {
+  30% {
+    translate: -2px 0;
+  }
+  55% {
+    translate: 2px 0;
+  }
+  80% {
+    translate: -1px 0;
+  }
+}
+@media (max-width: 640px) {
+  .legend-fan {
+    padding: 0.75rem 0.25rem 1.75rem;
+  }
+  .legend-fan li {
+    margin-inline: clamp(-18px, -4.2vw, -10px);
+    transform: translateY(calc(var(--abs-i, 0) * 12px)) rotate(calc(var(--i) * 6deg));
+  }
+  .legend-fan li:hover,
+  .legend-fan li.armed {
+    transform: translateY(calc(var(--abs-i, 0) * 12px)) rotate(0deg);
+  }
+  .legend-card {
+    width: clamp(68px, 20.5vw, 96px);
+    padding: 5px 5px 8px;
+    border-radius: 12px;
+  }
+}
+@media (hover: none) {
+  .legend-fan li:hover:not(.armed) {
+    transform: translateY(calc(var(--abs-i, 0) * 12px)) rotate(calc(var(--i) * 6deg));
+  }
+  .legend-fan li:hover:not(.armed) .legend-card {
+    transform: none;
+  }
+  .legend-fan:has(li:hover) li:not(:hover) .legend-card {
+    filter: none;
+  }
+  .legend-fan.has-armed li:not(.armed) .legend-card {
+    filter: brightness(0.76) saturate(0.85);
+  }
+  .legend-fan li:hover:not(.armed) .legend-art img {
+    transform: none;
+    animation: none;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   html,
   .pill,
-  .pill .pill-icon {
-    transition: none;
+  .pill .pill-icon,
+  .legend-fan li,
+  .legend-card,
+  .legend-art img {
+    transition: none !important;
+    animation: none !important;
   }
 }

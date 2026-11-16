@@ -419,3 +419,93 @@ export async function getEvolution(pokemon: Pokemon): Promise<EvolutionStage[]> 
 export function speciesIdOf(pokemon: Pokemon) {
   return idFromUrl(pokemon.speciesUrl);
 }
+
+/* ------------------------------------------------------------------ */
+/* Tradução PT/EN da Pokédex e lista completa de itens (Firma League) */
+/* ------------------------------------------------------------------ */
+
+const PT_CACHE_PREFIX = "dexlab:pt:";
+const ptMemCache = new Map<string, Promise<string>>();
+
+async function translateViaGoogle(text: string): Promise<string> {
+  const res = await fetch(
+    `https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=pt&dt=t&q=${encodeURIComponent(text)}`,
+  );
+  if (!res.ok) throw new Error(String(res.status));
+  const data = (await res.json()) as [[string][]];
+  const out = data[0].map((r) => r[0]).join("").trim();
+  if (!out) throw new Error("vazio");
+  return out;
+}
+
+async function translateViaMyMemory(text: string): Promise<string> {
+  const res = await fetch(
+    `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=en|pt-BR`,
+  );
+  const data = (await res.json()) as { responseStatus?: number; responseData?: { translatedText?: string } };
+  if (data.responseStatus !== 200 || !data.responseData?.translatedText) throw new Error("mymemory");
+  return data.responseData.translatedText.trim();
+}
+
+/** Traduz descrição/categoria da Pokédex para português, guardando no cache local. */
+export function translateToPt(raw: string): Promise<string> {
+  const text = raw.trim();
+  if (!text) return Promise.resolve("");
+  const hit = ptMemCache.get(text);
+  if (hit) return hit;
+
+  try {
+    const saved = localStorage.getItem(PT_CACHE_PREFIX + text);
+    if (saved) return Promise.resolve(saved);
+  } catch {
+    // segue sem cache
+  }
+
+  const promise = translateViaGoogle(text)
+    .catch(() => translateViaMyMemory(text))
+    .then((translated) => {
+      try {
+        localStorage.setItem(PT_CACHE_PREFIX + text, translated);
+      } catch {
+        // sem espaço
+      }
+      return translated;
+    });
+  promise.catch(() => ptMemCache.delete(text));
+  ptMemCache.set(text, promise);
+  return promise;
+}
+
+const ITEMS_KEY = "dexlab:itens:v1";
+let holdablePromise: Promise<string[]> | null = null;
+
+/** Todos os itens seguráveis em batalha da PokéAPI (como na Firma League). */
+export function getHoldableItems(): Promise<string[]> {
+  if (holdablePromise) return holdablePromise;
+  try {
+    const cached = JSON.parse(localStorage.getItem(ITEMS_KEY) ?? "null") as { at: number; items: string[] } | null;
+    if (cached && Date.now() - cached.at < WEEK * 4) return (holdablePromise = Promise.resolve(cached.items));
+  } catch {
+    // ignora
+  }
+  holdablePromise = Promise.all([
+    getJson<{ items: { name: string }[] }>(`${API}/item-attribute/holdable-active`),
+    getJson<{ items: { name: string }[] }>(`${API}/item-attribute/holdable-passive`).catch(() => ({ items: [] })),
+  ])
+    .then(([a, b]) => {
+      const items = [...new Set([...a.items, ...b.items].map((i) => displayName(i.name)))].sort((x, y) =>
+        x.localeCompare(y),
+      );
+      try {
+        localStorage.setItem(ITEMS_KEY, JSON.stringify({ at: Date.now(), items }));
+      } catch {
+        // ignora
+      }
+      return items;
+    })
+    .catch((err) => {
+      holdablePromise = null;
+      throw err;
+    });
+  return holdablePromise;
+}

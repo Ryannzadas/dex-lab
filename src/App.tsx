@@ -51,7 +51,7 @@ export default function App() {
     if (tab !== "inicio") url.searchParams.set("aba", tab);
     else url.searchParams.delete("aba");
     // Filtros da Pokédex só fazem sentido na aba dela.
-    if (tab !== "pokedex") ["regiao", "tipo", "formas"].forEach((k) => url.searchParams.delete(k));
+    if (tab !== "pokedex") ["regiao", "tipo", "formas", "lendarios"].forEach((k) => url.searchParams.delete(k));
     window.history.replaceState(window.history.state, "", url);
   }, [tab]);
 
@@ -150,6 +150,7 @@ export default function App() {
                     goToTab(t);
                     window.scrollTo({ top: 0 });
                   }}
+                  onOpen={openSummary}
                 />
               ) : tab === "time" ? (
                 <div className="grid grid-cols-1 gap-6">

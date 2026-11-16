@@ -6,6 +6,7 @@ import {
   getPokemon,
   getSpecies,
   STAT_LABEL,
+  translateToPt,
   type EvolutionStage,
   type LearnedMove,
   type MoveMethod,
@@ -109,29 +110,64 @@ export function SummaryView({ speciesId, initialFormId, onClose, onOpen, onAddTo
   return (
     <div className="grid grid-cols-1 gap-6 pt-8">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <button type="button" onClick={onClose} className="pill flex-row-reverse pr-4 pl-1.5">
-          Voltar
-          <span className="pill-icon rotate-180">
-            <ArrowIcon />
-          </span>
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <button type="button" onClick={onClose} className="pill flex-row-reverse pr-4 pl-1.5">
+            Voltar
+            <span className="pill-icon rotate-180">
+              <ArrowIcon />
+            </span>
+          </button>
+
+          {/* Navegação rápida entre Pokémon vizinhos (trazida da Firma League). */}
+          <nav aria-label="Pokémon vizinhos" className="flex items-center gap-1.5">
+            {speciesId > 1 && (
+              <button
+                type="button"
+                onClick={() => onOpen(speciesId - 1)}
+                aria-label={`Pokémon anterior (#${String(speciesId - 1).padStart(4, "0")})`}
+                className="inline-flex items-center gap-1 rounded-full border border-line bg-surface px-3 py-1.5 font-mono text-xs font-medium text-muted backdrop-blur transition-colors hover:border-ink hover:text-ink"
+              >
+                <span aria-hidden="true">←</span> #{String(speciesId - 1).padStart(4, "0")}
+              </button>
+            )}
+            {speciesId < 1025 && (
+              <button
+                type="button"
+                onClick={() => onOpen(speciesId + 1)}
+                aria-label={`Próximo Pokémon (#${String(speciesId + 1).padStart(4, "0")})`}
+                className="inline-flex items-center gap-1 rounded-full border border-line bg-surface px-3 py-1.5 font-mono text-xs font-medium text-muted backdrop-blur transition-colors hover:border-ink hover:text-ink"
+              >
+                #{String(speciesId + 1).padStart(4, "0")} <span aria-hidden="true">→</span>
+              </button>
+            )}
+          </nav>
+        </div>
 
         {species && species.varieties.length > 1 && (
           <div role="tablist" aria-label="Formas" className="flex flex-wrap gap-1 rounded-2xl border border-line bg-surface p-1 backdrop-blur-xl">
-            {species.varieties.map((v) => (
-              <button
-                key={v.id}
-                role="tab"
-                type="button"
-                aria-selected={formId === v.id}
-                onClick={() => setFormId(v.id)}
-                className={`rounded-xl px-3 py-1.5 text-sm font-medium transition-colors ${
-                  formId === v.id ? "bg-ink text-bg" : "text-muted hover:bg-line/60 hover:text-ink"
-                }`}
-              >
-                {v.label}
-              </button>
-            ))}
+            {species.varieties.map((v) => {
+              const isGem = !v.isDefault && /^(Mega|Primal)/.test(v.label);
+              return (
+                <button
+                  key={v.id}
+                  role="tab"
+                  type="button"
+                  aria-selected={formId === v.id}
+                  onClick={() => setFormId(v.id)}
+                  className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-sm font-medium transition-colors ${
+                    formId === v.id ? "bg-ink text-bg" : "text-muted hover:bg-line/60 hover:text-ink"
+                  }`}
+                >
+                  {isGem && (
+                    <svg viewBox="0 0 24 24" className="size-3.5" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                      <path d="M6 3h12l4 6-10 13L2 9Z" strokeLinejoin="round" />
+                      <path d="M11 3 8 9l4 13 4-13-3-6M2 9h20" strokeLinejoin="round" />
+                    </svg>
+                  )}
+                  {v.label}
+                </button>
+              );
+            })}
           </div>
         )}
       </div>
@@ -168,6 +204,37 @@ export function SummaryView({ speciesId, initialFormId, onClose, onOpen, onAddTo
   );
 }
 
+const DEX_LANG_KEY = "dexlab:dex-idioma";
+type DexLang = "pt" | "en";
+
+function readDexLang(): DexLang {
+  try {
+    return localStorage.getItem(DEX_LANG_KEY) === "en" ? "en" : "pt";
+  } catch {
+    return "pt";
+  }
+}
+
+function useTranslated(text: string | null, lang: DexLang) {
+  const [res, setRes] = useState<{ src: string; txt: string | null } | null>(null);
+  useEffect(() => {
+    if (lang !== "pt" || !text) return;
+    let alive = true;
+    translateToPt(text)
+      .then((t) => alive && setRes({ src: text, txt: t }))
+      .catch(() => alive && setRes({ src: text, txt: null }));
+    return () => {
+      alive = false;
+    };
+  }, [text, lang]);
+
+  if (!text) return { text: null, lang: "pt-BR", loading: false, failed: false };
+  if (lang === "en") return { text, lang: "en", loading: false, failed: false };
+  if (!res || res.src !== text) return { text, lang: "en", loading: true, failed: false };
+  if (res.txt) return { text: res.txt, lang: "pt-BR", loading: false, failed: false };
+  return { text, lang: "en", loading: false, failed: true };
+}
+
 function Header({
   species,
   pokemon,
@@ -191,6 +258,20 @@ function Header({
 }) {
   const color = TYPE_INFO[pokemon.types[0]].color;
   const second = TYPE_INFO[pokemon.types[1] ?? pokemon.types[0]].color;
+  const [lang, setLangState] = useState<DexLang>(readDexLang);
+  const setLang = (next: DexLang) => {
+    setLangState(next);
+    try {
+      localStorage.setItem(DEX_LANG_KEY, next);
+    } catch {
+      // ignora
+    }
+  };
+  const genus = useTranslated(species.genus, lang);
+  const flavor = useTranslated(species.flavor, lang);
+  const activeVariety = species.varieties.find((v) => v.id === pokemon.id);
+  const isMega = !!activeVariety && !activeVariety.isDefault && /^Mega/.test(activeVariety.label);
+  const isPrimal = !!activeVariety && !activeVariety.isDefault && /^Primal/.test(activeVariety.label);
 
   return (
     <Card className="relative overflow-hidden">
@@ -212,8 +293,14 @@ function Header({
               </span>
             )}
           </p>
-          <h1 className="font-display text-4xl font-extrabold tracking-[-0.03em] sm:text-5xl">{displayName(species.name)}</h1>
-          {species.genus && <p className="mt-1 text-muted">{species.genus}</p>}
+          <h1 className="font-display text-4xl font-extrabold tracking-[-0.03em] sm:text-5xl">
+            {activeVariety && !activeVariety.isDefault ? `${displayName(species.name)} (${activeVariety.label})` : displayName(species.name)}
+          </h1>
+          {genus.text && (
+            <p className={`mt-1 text-muted ${genus.loading ? "opacity-60" : ""}`} lang={genus.lang}>
+              {genus.text}
+            </p>
+          )}
         </div>
         <CryButton key={pokemon.id} pokemon={pokemon} />
       </div>
@@ -256,14 +343,51 @@ function Header({
         </ul>
       </div>
 
-      {species.flavor && (
+      {(isMega || isPrimal) && (
+        <p className="mt-4 flex items-center gap-2 rounded-2xl border border-line bg-surface-solid/60 px-3 py-2 text-xs text-muted">
+          <svg viewBox="0 0 24 24" className="size-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+            <path d="M6 3h12l4 6-10 13L2 9Z" strokeLinejoin="round" />
+            <path d="M11 3 8 9l4 13 4-13-3-6M2 9h20" strokeLinejoin="round" />
+          </svg>
+          <span>
+            {isPrimal
+              ? "Forma Primal: Reversão Primal ativada na batalha com o Orb correspondente."
+              : "Mega Evolução: transformação de batalha (precisa da Mega Stone correspondente)."}
+          </span>
+        </p>
+      )}
+
+      {flavor.text && (
         <figure className="mt-5 border-t border-line pt-4">
-          <blockquote className="braces text-[15px] leading-relaxed" lang="en">
-            {species.flavor}
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <span className="font-mono text-[11px] tracking-[0.16em] text-muted uppercase">Descrição da Pokédex</span>
+            {/* Seletor de idioma PT / EN trazido da Firma League */}
+            <div role="group" aria-label="Idioma da descrição" className="inline-flex rounded-lg border border-line p-0.5 text-[11px] font-semibold">
+              {(["pt", "en"] as const).map((m) => (
+                <button
+                  key={m}
+                  type="button"
+                  aria-pressed={lang === m}
+                  onClick={() => setLang(m)}
+                  className={`rounded-md px-2 py-0.5 uppercase transition-colors ${
+                    lang === m ? "bg-ink text-bg" : "text-muted hover:text-ink"
+                  }`}
+                >
+                  {m}
+                </button>
+              ))}
+            </div>
+          </div>
+          <blockquote className={`braces text-[15px] leading-relaxed ${flavor.loading ? "opacity-60" : ""}`} lang={flavor.lang}>
+            {flavor.text}
           </blockquote>
           <figcaption className="mt-2 text-xs text-muted">
-            Pokédex de {species.flavorVersion} · texto original em inglês
-            {/* A PokéAPI só tem descrição por espécie, então formas mostram a da forma normal. */}
+            Pokédex de {species.flavorVersion}
+            {lang === "pt" && !flavor.loading
+              ? flavor.failed
+                ? " · tradução indisponível agora, mostrando o original"
+                : " · tradução automática"
+              : " · texto original em inglês"}
             {species.varieties.some((v) => v.id === pokemon.id && !v.isDefault) && " · descrição da forma normal"}
           </figcaption>
         </figure>

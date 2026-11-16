@@ -1,13 +1,14 @@
 import { useEffect, useRef, useState } from "react";
+import { regionLabelOfId } from "@/lib/dex";
 import { GAMES, gameById, type Game } from "@/lib/games";
-import { artworkUrl, cryMp3Url, cryUrl, getPokemonList } from "@/lib/pokeapi";
+import { artworkUrl, cryMp3Url, cryUrl, getPokemonList, pokemonName } from "@/lib/pokeapi";
 import type { TeamsApi } from "@/lib/team";
 import { ArrowIcon } from "./ui";
 
 type Filter = "todos" | "hacks" | number;
 
 /**
- * Tela inicial: continuar o último time (cards em arco, ideia do horizonx.so)
+ * Tela inicial: continuar o último time (leque de cards estilo Firma League / horizonx.so)
  * e escolher o jogo do próximo time numa grade de cards grandes (ideia do awwwards.com).
  */
 export function Home({
@@ -15,11 +16,13 @@ export function Home({
   onContinue,
   onNewTeam,
   onGo,
+  onOpen,
 }: {
   teams: TeamsApi;
   onContinue: (teamId: string) => void;
   onNewTeam: (game: Game | null) => void;
   onGo: (tab: "pokedex" | "comparar") => void;
+  onOpen: (speciesId: number, formId?: number) => void;
 }) {
   const [filter, setFilter] = useState<Filter>("todos");
   const official = GAMES.filter((g) => g.kind === "official");
@@ -81,7 +84,12 @@ export function Home({
           )}
         </div>
 
-        <TeamArc ids={last?.members.map((m) => m.id) ?? [1, 4, 7, 25, 133, 151]} shiny={last?.members.map((m) => m.shiny) ?? []} />
+        <TeamArc
+          ids={last?.members.map((m) => m.id) ?? [150, 250, 493, 384, 483]}
+          shiny={last?.members.map((m) => m.shiny) ?? []}
+          nicks={last?.members.map((m) => m.nickname) ?? []}
+          onOpen={onOpen}
+        />
       </section>
 
       {/* Escolher o jogo */}
@@ -203,139 +211,311 @@ function GameTile({ game, onPick }: { game: Game; onPick: () => void }) {
   );
 }
 
-/** Seis cards em arco (inspirado no hero do horizonx.so), com som ao passar o mouse ou tocar. */
-function TeamArc({ ids, shiny }: { ids: number[]; shiny: boolean[] }) {
+const SOUND_KEY = "dexlab:som";
+const CRY_VOL = 0.18;
+const audioCache = new Map<string, HTMLAudioElement>();
+
+function readSoundEnabled() {
+  try {
+    return localStorage.getItem(SOUND_KEY) !== "off";
+  } catch {
+    return true;
+  }
+}
+
+/**
+ * Leque de cartas no estilo da Firma League:
+ * - mostra região, #número, arte oficial (com rugido no hover) e nome;
+ * - pré-carrega os sons ao entrar no leque, toca no hover (140ms) e faz fade-out suave (220ms) ao sair;
+ * - clicar abre o sumário do Pokémon (no celular: 1º toque destaca e toca o som, 2º toque abre);
+ * - botão "Som ligado / Som desligado" embaixo.
+ */
+function TeamArc({
+  ids,
+  shiny,
+  nicks,
+  onOpen,
+}: {
+  ids: number[];
+  shiny: boolean[];
+  nicks: string[];
+  onOpen: (speciesId: number, formId?: number) => void;
+}) {
   const n = ids.length;
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-  const namesRef = useRef<Record<number, string>>({
+  const [soundOn, setSoundOn] = useState(readSoundEnabled);
+  const [armedIdx, setArmedIdx] = useState<number | null>(null);
+  const [names, setNames] = useState<Record<number, string>>({
     1: "bulbasaur",
     4: "charmander",
     7: "squirtle",
     25: "pikachu",
     133: "eevee",
+    150: "mewtwo",
     151: "mew",
+    250: "ho-oh",
+    384: "rayquaza",
+    483: "dialga",
+    493: "arceus",
   });
-  const [playingIdx, setPlayingIdx] = useState<number | null>(null);
-  const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
-  const [needsClick, setNeedsClick] = useState(false);
+
+  const activeAudioRef = useRef<HTMLAudioElement | null>(null);
+  const fadeRafRef = useRef<number>(0);
+  const hoverTimerRef = useRef<number>(0);
+  const lastPlayedRef = useRef<{ id: number; t: number }>({ id: 0, t: 0 });
+  const pointerTypeRef = useRef<string>("mouse");
+  const fanRef = useRef<HTMLUListElement | null>(null);
 
   useEffect(() => {
     getPokemonList()
       .then((list) => {
-        for (const p of list) namesRef.current[p.id] = p.name;
+        const map: Record<number, string> = {};
+        for (const p of list) map[p.id] = p.name;
+        setNames((prev) => ({ ...prev, ...map }));
       })
       .catch(() => {});
-    const unlock = () => setNeedsClick(false);
-    window.addEventListener("pointerdown", unlock, { passive: true });
-    window.addEventListener("keydown", unlock, { passive: true });
     return () => {
-      window.removeEventListener("pointerdown", unlock);
-      window.removeEventListener("keydown", unlock);
-      audioRef.current?.pause();
-      audioRef.current = null;
+      window.clearTimeout(hoverTimerRef.current);
+      cancelAnimationFrame(fadeRafRef.current);
+      activeAudioRef.current?.pause();
     };
   }, []);
 
-  const playCry = (id: number, idx: number) => {
+  // Desarma o card no celular ao tocar fora do leque.
+  useEffect(() => {
+    if (armedIdx === null) return;
+    const onDocDown = (e: PointerEvent) => {
+      if (!fanRef.current?.contains(e.target as Node)) setArmedIdx(null);
+    };
+    document.addEventListener("pointerdown", onDocDown);
+    return () => document.removeEventListener("pointerdown", onDocDown);
+  }, [armedIdx]);
+
+  const getAudio = (id: number) => {
+    const canOgg = typeof Audio !== "undefined" && new Audio().canPlayType('audio/ogg; codecs="vorbis"') !== "";
+    const slug = names[id];
+    const src = !canOgg && slug ? cryMp3Url(slug) : cryUrl(id);
+    let a = audioCache.get(src);
+    if (!a) {
+      a = new Audio(src);
+      a.preload = "auto";
+      const fallback = slug ? cryMp3Url(slug) : null;
+      if (fallback && src !== fallback) {
+        a.onerror = () => {
+          if (a && a.src !== fallback) a.src = fallback;
+        };
+      }
+      audioCache.set(src, a);
+    }
+    return a;
+  };
+
+  const stopCry = (immediate = false) => {
+    const cur = activeAudioRef.current;
+    if (!cur) return;
+    cancelAnimationFrame(fadeRafRef.current);
+    if (immediate || cur.paused) {
+      cur.pause();
+      activeAudioRef.current = null;
+      return;
+    }
+    const startVol = cur.volume;
+    const t0 = performance.now();
+    const step = (now: number) => {
+      const p = Math.min(1, (now - t0) / 220);
+      cur.volume = startVol * (1 - p);
+      if (p < 1) {
+        fadeRafRef.current = requestAnimationFrame(step);
+      } else {
+        cur.pause();
+        cur.volume = CRY_VOL;
+        if (activeAudioRef.current === cur) activeAudioRef.current = null;
+      }
+    };
+    fadeRafRef.current = requestAnimationFrame(step);
+  };
+
+  const playNow = (id: number, force = false) => {
+    if (!soundOn && !force) return;
+    const now = performance.now();
+    if (!force && lastPlayedRef.current.id === id && now - lastPlayedRef.current.t < 1500) return;
+    lastPlayedRef.current = { id, t: now };
+    stopCry(true);
     try {
-      audioRef.current?.pause();
-      const canOgg = typeof Audio !== "undefined" && new Audio().canPlayType("audio/ogg; codecs=vorbis") !== "";
-      const name = namesRef.current[id];
-      const primary = !canOgg && name ? cryMp3Url(name) : cryUrl(id);
-      const fallback = name ? cryMp3Url(name) : null;
-      const audio = new Audio(primary);
-      audio.volume = 0.25;
-      audioRef.current = audio;
-      setPlayingIdx(idx);
-      audio.onended = () => setPlayingIdx((cur) => (cur === idx ? null : cur));
-      audio.onerror = () => {
-        if (fallback && audio.src !== fallback) {
-          audio.src = fallback;
-          audio.play().catch(() => setPlayingIdx((cur) => (cur === idx ? null : cur)));
-        } else {
-          setPlayingIdx((cur) => (cur === idx ? null : cur));
+      const a = getAudio(id);
+      a.volume = CRY_VOL;
+      try {
+        a.currentTime = 0;
+      } catch {
+        // ignora se ainda não carregou metadados
+      }
+      activeAudioRef.current = a;
+      const slug = names[id];
+      const fallback = slug ? cryMp3Url(slug) : null;
+      a.play().catch(() => {
+        if (fallback && a.src !== fallback) {
+          a.src = fallback;
+          a.play().catch(() => {});
         }
-      };
-      audio.play().then(
-        () => setNeedsClick(false),
-        (err: unknown) => {
-          if (err instanceof DOMException && err.name === "NotAllowedError") {
-            setNeedsClick(true);
-            setPlayingIdx((cur) => (cur === idx ? null : cur));
-          } else if (fallback && audio.src !== fallback) {
-            audio.src = fallback;
-            audio.play().then(
-              () => setNeedsClick(false),
-              () => setPlayingIdx((cur) => (cur === idx ? null : cur)),
-            );
-          } else {
-            setPlayingIdx((cur) => (cur === idx ? null : cur));
-          }
-        },
-      );
+      });
     } catch {
-      setPlayingIdx(null);
+      // ignora
     }
   };
 
+  const scheduleCry = (id: number) => {
+    window.clearTimeout(hoverTimerRef.current);
+    hoverTimerRef.current = window.setTimeout(() => playNow(id), 140);
+  };
+
+  const clearSchedule = () => window.clearTimeout(hoverTimerRef.current);
+
+  const toggleSound = () => {
+    setSoundOn((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem(SOUND_KEY, next ? "on" : "off");
+      } catch {
+        // ignora
+      }
+      if (!next) stopCry(true);
+      return next;
+    });
+  };
+
+  const openMon = (id: number) => {
+    // Se for uma forma (id > 1025), descobre a espécie base pelo nome.
+    if (id <= 1025) {
+      onOpen(id);
+      return;
+    }
+    const slug = names[id];
+    if (slug) {
+      const baseSlug = slug.replace(/-(alola|galar(?:-[a-z]+)?|hisui|paldea(?:-[a-z-]+)?|mega(?:-[xyz])?|primal|gmax)$/, "");
+      const baseEntry = Object.entries(names).find(([k, v]) => Number(k) <= 1025 && v === baseSlug);
+      if (baseEntry) {
+        onOpen(Number(baseEntry[0]), id);
+        return;
+      }
+    }
+    onOpen(id);
+  };
+
+  const center = (n - 1) / 2;
+
   return (
-    <div className="relative mx-auto h-48 w-full max-w-xl select-none [--arc-x:205%] sm:h-80 sm:[--arc-x:265%]">
-      {ids.map((id, i) => {
-        // Passo fixo por carta: com 2 ou 3 Pokémon eles ficam juntos no centro em vez de nas pontas.
-        const t = (i - (n - 1) / 2) / 5; // -0,5 … 0,5 quando há 6
-        const active = hoveredIdx === i || playingIdx === i;
-        const lift = active ? -14 : 0;
-        const scale = (1 - Math.abs(t) * 0.1) * (active ? 1.1 : 1);
-        return (
-          <button
-            key={`${id}-${i}`}
-            type="button"
-            onMouseEnter={() => {
-              setHoveredIdx(i);
-              playCry(id, i);
-            }}
-            onMouseLeave={() => setHoveredIdx((cur) => (cur === i ? null : cur))}
-            onFocus={() => setHoveredIdx(i)}
-            onBlur={() => setHoveredIdx((cur) => (cur === i ? null : cur))}
-            onClick={() => playCry(id, i)}
-            aria-label={`Ouvir o som do Pokémon #${id}`}
-            className={`group absolute top-1/2 left-1/2 h-32 w-22 cursor-pointer rounded-2xl border bg-surface-solid shadow-xl transition-[transform,border-color,box-shadow] duration-300 sm:h-52 sm:w-36 sm:rounded-3xl ${
-              active ? "border-ink shadow-2xl" : "border-line"
-            }`}
-            style={{
-              transform: `translate(-50%, -50%) translateX(calc(${t} * var(--arc-x))) translateY(${Math.abs(t) * 26 + lift}px) rotate(${t * 18}deg) scale(${scale})`,
-              zIndex: active ? 30 : 10 - Math.round(Math.abs(t) * 10),
-            }}
-          >
-            <img
-              src={artworkUrl(id, shiny[i])}
-              alt=""
-              width={140}
-              height={140}
-              draggable={false}
-              className="pointer-events-none absolute inset-x-0 top-1/2 mx-auto w-[84%] -translate-y-1/2 drop-shadow-[0_10px_14px_rgb(0_0_0/0.2)]"
-            />
-            <span
-              aria-hidden="true"
-              className={`pointer-events-none absolute top-2 right-2 grid size-6 place-items-center rounded-full border transition-opacity sm:top-2.5 sm:right-2.5 sm:size-7 ${
-                playingIdx === i
-                  ? "border-ink bg-ink text-bg opacity-100"
-                  : "border-line bg-surface-solid/90 text-muted opacity-0 group-hover:opacity-100"
-              }`}
+    <div className="relative flex flex-col items-center">
+      <ul
+        ref={fanRef}
+        className={`legend-fan${armedIdx !== null ? " has-armed" : ""}`}
+        aria-label="Pokémon em destaque"
+        onPointerEnter={() => {
+          if (soundOn) ids.forEach((id) => getAudio(id));
+        }}
+        onPointerLeave={(e) => {
+          if (e.pointerType === "mouse") stopCry();
+        }}
+      >
+        {ids.map((id, idx) => {
+          const offset = idx - center;
+          const absOffset = Math.abs(offset);
+          const slug = names[id];
+          const display = nicks[idx] || (slug ? pokemonName(slug) : `#${id}`);
+          const dexNum = id <= 1025 ? id : Number(Object.entries(names).find(([k, v]) => Number(k) <= 1025 && slug?.startsWith(`${v}-`))?.[0] ?? id);
+          const region = regionLabelOfId(dexNum);
+          const isCenter = absOffset < 0.6;
+          return (
+            <li
+              key={`${id}-${idx}`}
+              className={`${armedIdx === idx ? "armed " : ""}${isCenter ? "is-center" : ""}`}
+              style={
+                {
+                  "--i": offset,
+                  "--abs-i": absOffset,
+                  "--z": 12 - Math.round(absOffset * 2),
+                } as React.CSSProperties
+              }
             >
-              <svg viewBox="0 0 24 24" className="size-3.5" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M11 5 6 9H3v6h3l5 4V5Z" strokeLinejoin="round" />
-                <path d="M15.5 8.5a5 5 0 0 1 0 7" strokeLinecap="round" />
-              </svg>
-            </span>
-          </button>
-        );
-      })}
-      {needsClick && (
-        <p className="pointer-events-none absolute inset-x-0 -bottom-5 text-center font-mono text-[11px] text-muted">
-          Clique num card uma vez para liberar o som no navegador
-        </p>
-      )}
+              <button
+                type="button"
+                className="legend-card"
+                onPointerDown={(e) => {
+                  pointerTypeRef.current = e.pointerType;
+                  if (e.pointerType !== "mouse" && soundOn) getAudio(id);
+                }}
+                onPointerEnter={(e) => {
+                  if (e.pointerType === "mouse") scheduleCry(id);
+                }}
+                onPointerLeave={clearSchedule}
+                onFocus={() => {
+                  if (pointerTypeRef.current === "mouse") scheduleCry(id);
+                }}
+                onBlur={clearSchedule}
+                onClick={(e) => {
+                  if (pointerTypeRef.current !== "mouse") {
+                    if (armedIdx !== idx) {
+                      e.preventDefault();
+                      setArmedIdx(idx);
+                      lastPlayedRef.current = { id: 0, t: 0 };
+                      playNow(id);
+                    } else {
+                      e.preventDefault();
+                      openMon(id);
+                    }
+                  } else {
+                    playNow(id);
+                    openMon(id);
+                  }
+                }}
+              >
+                <span className="flex items-center justify-between gap-1 text-[10px] sm:text-[11px]">
+                  <span className="truncate font-extrabold tracking-[0.08em] text-muted uppercase">{region}</span>
+                  <span className="hidden font-mono text-muted sm:inline">#{String(dexNum).padStart(4, "0")}</span>
+                </span>
+                <span className="legend-art relative">
+                  <img
+                    src={artworkUrl(id, shiny[idx])}
+                    alt={display}
+                    width={180}
+                    height={180}
+                    draggable={false}
+                  />
+                  {shiny[idx] && (
+                    <span className="absolute top-0 right-0 text-xs text-amber-500" aria-hidden="true">
+                      ✦
+                    </span>
+                  )}
+                </span>
+                <span className="block truncate text-center font-display text-xs font-bold sm:text-base">{display}</span>
+                {armedIdx === idx && (
+                  <span className="mt-0.5 block text-center font-mono text-[9px] font-semibold text-muted sm:hidden" aria-hidden="true">
+                    Toque de novo p/ abrir
+                  </span>
+                )}
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+
+      <button
+        type="button"
+        aria-pressed={soundOn}
+        onClick={toggleSound}
+        title={soundOn ? "Desligar os sons ao passar o mouse" : "Ligar os sons ao passar o mouse"}
+        className="inline-flex items-center gap-1.5 rounded-full border border-line bg-surface px-3 py-1 text-xs font-semibold text-muted backdrop-blur transition-colors hover:border-ink hover:text-ink"
+      >
+        {soundOn ? (
+          <svg viewBox="0 0 24 24" className="size-3.5" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+            <path d="M11 5 6 9H3v6h3l5 4V5Z" strokeLinejoin="round" />
+            <path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13" strokeLinecap="round" />
+          </svg>
+        ) : (
+          <svg viewBox="0 0 24 24" className="size-3.5" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+            <path d="M11 5 6 9H3v6h3l5 4V5ZM22 9l-6 6M16 9l6 6" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        )}
+        <span>{soundOn ? "Som ligado" : "Som desligado"}</span>
+      </button>
     </div>
   );
 }

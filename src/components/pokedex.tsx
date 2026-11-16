@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { buildEntries, getTypeIndex, REGIONS, type DexEntry, type RegionId } from "@/lib/dex";
+import { buildEntries, getTypeIndex, isLegendaryOrMythical, REGIONS, type DexEntry, type RegionId } from "@/lib/dex";
 import { artworkUrl, getPokemonList, pokemonName } from "@/lib/pokeapi";
 import type { Availability } from "@/lib/games";
 import { TYPE_INFO, TYPES, type TypeName } from "@/lib/types";
@@ -24,7 +24,7 @@ function readFilters() {
     .split(",")
     .filter((t): t is TypeName => (TYPES as readonly string[]).includes(t))
     .slice(0, 2);
-  return { region, types, forms: p.get("formas") === "1" };
+  return { region, types, forms: p.get("formas") === "1", legendaries: p.get("lendarios") === "1" };
 }
 
 /** Pokédex com busca e filtros por região e tipo. Clicar num Pokémon abre o resumo. */
@@ -37,6 +37,7 @@ export function Pokedex({ onOpen, onAddToTeam, teamIds, teamFull, onTypes, check
   const [region, setRegion] = useState<RegionId | null>(initial.region);
   const [types, setTypes] = useState<TypeName[]>(initial.types);
   const [forms, setForms] = useState(initial.forms);
+  const [legendaries, setLegendaries] = useState(initial.legendaries);
   const [shown, setShown] = useState(PAGE);
   const sentinel = useRef<HTMLDivElement>(null);
 
@@ -58,8 +59,10 @@ export function Pokedex({ onOpen, onAddToTeam, teamIds, teamFull, onTypes, check
     else url.searchParams.delete("tipo");
     if (forms) url.searchParams.set("formas", "1");
     else url.searchParams.delete("formas");
+    if (legendaries) url.searchParams.set("lendarios", "1");
+    else url.searchParams.delete("lendarios");
     window.history.replaceState(window.history.state, "", url);
-  }, [region, types, forms]);
+  }, [region, types, forms, legendaries]);
 
   // As manchas do fundo seguem os tipos escolhidos no filtro.
   useEffect(() => onTypes(types), [types, onTypes]);
@@ -71,6 +74,7 @@ export function Pokedex({ onOpen, onAddToTeam, teamIds, teamFull, onTypes, check
     const words = q.split(/[\s-]+/).filter(Boolean);
     return entries
       .filter((e) => forms || !e.isForm)
+      .filter((e) => !legendaries || isLegendaryOrMythical(e.dexNumber))
       .filter((e) => !region || e.region === region)
       .filter((e) => types.every((t) => typeIndex?.[e.id]?.includes(t)))
       .filter((e) => {
@@ -79,10 +83,10 @@ export function Pokedex({ onOpen, onAddToTeam, teamIds, teamFull, onTypes, check
         return words.every((w) => e.name.includes(w));
       })
       .sort((a, b) => a.dexNumber - b.dexNumber || Number(a.isForm) - Number(b.isForm) || a.id - b.id);
-  }, [entries, typeIndex, query, region, types, forms]);
+  }, [entries, typeIndex, query, region, types, forms, legendaries]);
 
   // Volta para o começo da lista quando o filtro muda.
-  const filterKey = `${query}|${region}|${types.join()}|${forms}`;
+  const filterKey = `${query}|${region}|${types.join()}|${forms}|${legendaries}`;
   const [lastKey, setLastKey] = useState(filterKey);
   if (lastKey !== filterKey) {
     setLastKey(filterKey);
@@ -182,10 +186,31 @@ export function Pokedex({ onOpen, onAddToTeam, teamIds, teamFull, onTypes, check
           </div>
         </fieldset>
 
-        <label className="mt-4 inline-flex cursor-pointer items-center gap-2 text-sm">
-          <input type="checkbox" checked={forms} onChange={(e) => setForms(e.target.checked)} className="size-4 accent-current" />
-          Mostrar formas regionais, Mega e Gigantamax
-        </label>
+        <div className="mt-4 flex flex-wrap items-center gap-x-6 gap-y-2">
+          <label className="inline-flex cursor-pointer items-center gap-2 text-sm">
+            <input type="checkbox" checked={legendaries} onChange={(e) => setLegendaries(e.target.checked)} className="size-4 accent-current" />
+            Lendários e míticos
+          </label>
+          <label className="inline-flex cursor-pointer items-center gap-2 text-sm">
+            <input type="checkbox" checked={forms} onChange={(e) => setForms(e.target.checked)} className="size-4 accent-current" />
+            Mostrar formas regionais, Mega e Gigantamax
+          </label>
+          {(query || region || types.length > 0 || forms || legendaries) && (
+            <button
+              type="button"
+              onClick={() => {
+                setQuery("");
+                setRegion(null);
+                setTypes([]);
+                setForms(false);
+                setLegendaries(false);
+              }}
+              className="rounded-full border border-line px-3 py-1 text-xs font-medium text-muted transition-colors hover:border-ink hover:text-ink"
+            >
+              Limpar busca e filtros
+            </button>
+          )}
+        </div>
       </Card>
 
       {error && (
