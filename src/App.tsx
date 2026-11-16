@@ -1,10 +1,12 @@
 import { animated, useTrail } from "@react-spring/web";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Blobs } from "@/components/blobs";
 import { CompareTab } from "@/components/compare";
+import { SummaryView } from "@/components/summary";
 import { TeamTab } from "@/components/team";
 import { ArrowIcon } from "@/components/ui";
 import { useIdList, usePrefersReducedMotion, useTheme } from "@/lib/state";
+import type { TypeName } from "@/lib/types";
 import { usePokemons } from "@/lib/use-pokemon";
 
 type Tab = "time" | "comparar";
@@ -13,8 +15,15 @@ function readTab(): Tab {
   return new URLSearchParams(window.location.search).get("aba") === "comparar" ? "comparar" : "time";
 }
 
+function readSummary(): number | null {
+  const n = Number(new URLSearchParams(window.location.search).get("pokemon"));
+  return Number.isInteger(n) && n > 0 ? n : null;
+}
+
 export default function App() {
   const [tab, setTab] = useState<Tab>(readTab);
+  const [summaryId, setSummaryId] = useState<number | null>(readSummary);
+  const [summaryTypes, setSummaryTypes] = useState<TypeName[]>([]);
   const team = useIdList("time", 6);
   const compare = useIdList("comparar", 4);
   const teamData = usePokemons(team.ids);
@@ -25,43 +34,92 @@ export default function App() {
     const url = new URL(window.location.href);
     if (tab === "comparar") url.searchParams.set("aba", "comparar");
     else url.searchParams.delete("aba");
-    window.history.replaceState(null, "", url);
+    window.history.replaceState(window.history.state, "", url);
   }, [tab]);
 
-  const activeTypes = (tab === "time" ? teamData.list : compareData.list).flatMap((p) => p.types);
+  // O resumo vive no link (?pokemon=6), então o botão "voltar" do navegador fecha ele.
+  useEffect(() => {
+    const onPop = () => setSummaryId(readSummary());
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, []);
+
+  const openSummary = useCallback((speciesId: number) => {
+    const url = new URL(window.location.href);
+    url.searchParams.set("pokemon", String(speciesId));
+    window.history.pushState({ summary: true }, "", url);
+    setSummaryId(speciesId);
+  }, []);
+
+  const closeSummary = useCallback(() => {
+    if (window.history.state?.summary) {
+      window.history.back();
+      return;
+    }
+    const url = new URL(window.location.href);
+    url.searchParams.delete("pokemon");
+    window.history.pushState(null, "", url);
+    setSummaryId(null);
+  }, []);
+
+  const goToTab = (t: Tab) => {
+    if (summaryId !== null) closeSummary();
+    setTab(t);
+  };
+
+  const activeTypes =
+    summaryId !== null ? summaryTypes : (tab === "time" ? teamData.list : compareData.list).flatMap((p) => p.types);
 
   return (
     <>
       <Blobs types={activeTypes} />
-      <Toolbar tab={tab} setTab={setTab} dark={theme.dark} toggleTheme={theme.toggle} />
+      <Toolbar tab={summaryId !== null ? null : tab} setTab={goToTab} dark={theme.dark} toggleTheme={theme.toggle} />
 
       <main className="mx-auto max-w-6xl px-4 pb-16 sm:px-6">
-        <Hero />
-        <div role="tabpanel" id={`painel-${tab}`} aria-labelledby={`aba-${tab}`} className="scroll-mt-24">
-          {tab === "time" ? (
-            <TeamTab
-              ids={team.ids}
-              team={teamData.list}
-              pending={teamData.pending}
-              onAdd={team.add}
-              onRemove={team.remove}
-              onClear={team.clear}
-            />
-          ) : (
-            <CompareTab
-              ids={compare.ids}
-              list={compareData.list}
-              pending={compareData.pending}
-              onAdd={compare.add}
-              onRemove={compare.remove}
-            />
-          )}
-          {(tab === "time" ? teamData.failed : compareData.failed).length > 0 && (
-            <p className="mt-4 text-center text-sm text-red-600 dark:text-red-400" role="alert">
-              Alguns Pokémon não carregaram. Confira a conexão e recarregue a página.
-            </p>
-          )}
-        </div>
+        {summaryId !== null ? (
+          <SummaryView
+            key={summaryId}
+            speciesId={summaryId}
+            onClose={closeSummary}
+            onOpen={openSummary}
+            onAddToTeam={team.add}
+            onCompare={compare.add}
+            teamIds={team.ids}
+            compareIds={compare.ids}
+            onTypes={setSummaryTypes}
+          />
+        ) : (
+          <>
+            <Hero />
+            <div role="tabpanel" id={`painel-${tab}`} aria-labelledby={`aba-${tab}`} className="scroll-mt-24">
+              {tab === "time" ? (
+                <TeamTab
+                  ids={team.ids}
+                  team={teamData.list}
+                  pending={teamData.pending}
+                  onAdd={team.add}
+                  onRemove={team.remove}
+                  onClear={team.clear}
+                  onOpen={openSummary}
+                />
+              ) : (
+                <CompareTab
+                  ids={compare.ids}
+                  list={compareData.list}
+                  pending={compareData.pending}
+                  onAdd={compare.add}
+                  onRemove={compare.remove}
+                  onOpen={openSummary}
+                />
+              )}
+              {(tab === "time" ? teamData.failed : compareData.failed).length > 0 && (
+                <p className="mt-4 text-center text-sm text-red-600 dark:text-red-400" role="alert">
+                  Alguns Pokémon não carregaram. Confira a conexão e recarregue a página.
+                </p>
+              )}
+            </div>
+          </>
+        )}
       </main>
 
       <Footer dark={theme.dark} />
@@ -76,7 +134,7 @@ function Toolbar({
   dark,
   toggleTheme,
 }: {
-  tab: Tab;
+  tab: Tab | null;
   setTab: (t: Tab) => void;
   dark: boolean;
   toggleTheme: () => void;

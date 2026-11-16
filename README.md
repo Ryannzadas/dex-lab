@@ -22,6 +22,19 @@ Você coloca de dois a quatro Pokémon lado a lado e compara:
 - habilidades, incluindo as ocultas;
 - altura, peso e cadeia de evolução.
 
+### Resumo de cada Pokémon
+
+Clique num Pokémon do time ou no nome dele na comparação para abrir o resumo. O resumo traz:
+
+- **Formas:** abas para cada uma (Normal, Mega X/Y, Gigantamax, Alola, Galar…).
+- **Arte e som:** a arte oficial com botão pra ver a versão **shiny** e o **grito** do Pokémon.
+- **Dados:** categoria, altura, peso, habilidades e descrição da Pokédex.
+- **Batalha:** status base e fraquezas/resistências agrupadas.
+- **Evolução:** a cadeia completa, com a condição de cada etapa.
+- **Golpes:** separados por nível, TM, ovo e tutor.
+
+O link de cada resumo é próprio (`?pokemon=6`), e o botão "voltar" do navegador fecha o resumo.
+
 ### Compartilhar
 
 O time e a comparação ficam salvos no navegador e no link (`?time=6,9,3`). É só mandar a URL.

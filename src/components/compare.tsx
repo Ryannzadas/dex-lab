@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import {
   displayName,
   getEvolution,
+  speciesIdOf,
   spriteUrl,
   STAT_LABEL,
   type EvolutionStage,
@@ -23,9 +24,10 @@ type Props = {
   pending: number[];
   onAdd: (id: number) => void;
   onRemove: (id: number) => void;
+  onOpen: (speciesId: number) => void;
 };
 
-export function CompareTab({ ids, list, pending, onAdd, onRemove }: Props) {
+export function CompareTab({ ids, list, pending, onAdd, onRemove, onOpen }: Props) {
   const best = bestPerStat(list);
 
   return (
@@ -51,7 +53,7 @@ export function CompareTab({ ids, list, pending, onAdd, onRemove }: Props) {
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           {list.map((p) => (
-            <Column key={p.id} pokemon={p} best={best} onRemove={() => onRemove(p.id)} />
+            <Column key={p.id} pokemon={p} best={best} onRemove={() => onRemove(p.id)} onOpen={() => onOpen(speciesIdOf(p))} />
           ))}
           {pending.map((id) => (
             <div key={id} className="h-96 animate-pulse rounded-3xl border border-line bg-line/40" aria-label="Carregando" />
@@ -73,7 +75,17 @@ function bestPerStat(list: Pokemon[]) {
   return best;
 }
 
-function Column({ pokemon, best, onRemove }: { pokemon: Pokemon; best: Record<string, number>; onRemove: () => void }) {
+function Column({
+  pokemon,
+  best,
+  onRemove,
+  onOpen,
+}: {
+  pokemon: Pokemon;
+  best: Record<string, number>;
+  onRemove: () => void;
+  onOpen: () => void;
+}) {
   const total = pokemon.stats.reduce((a, s) => a + s.value, 0);
   const color = TYPE_INFO[pokemon.types[0]].color;
 
@@ -100,7 +112,16 @@ function Column({ pokemon, best, onRemove }: { pokemon: Pokemon; best: Record<st
       <div>
         <p className="font-mono text-xs text-muted">#{String(pokemon.id).padStart(4, "0")}</p>
         <div className="flex items-center justify-between gap-2">
-          <h3 className="font-display text-2xl font-bold tracking-tight">{displayName(pokemon.name)}</h3>
+          <h3 className="font-display text-2xl font-bold tracking-tight">
+            <button
+              type="button"
+              onClick={onOpen}
+              className="text-left underline decoration-line decoration-2 underline-offset-4 transition-colors hover:decoration-ink"
+              title="Ver resumo completo"
+            >
+              {displayName(pokemon.name)}
+            </button>
+          </h3>
           <CryButton pokemon={pokemon} />
         </div>
         <div className="mt-2 flex gap-1.5">
@@ -145,7 +166,7 @@ function Column({ pokemon, best, onRemove }: { pokemon: Pokemon; best: Record<st
   );
 }
 
-function Info({ label, value }: { label: string; value: string }) {
+export function Info({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-2xl border border-line px-3 py-2">
       <p className="text-[11px] text-muted">{label}</p>
@@ -154,7 +175,7 @@ function Info({ label, value }: { label: string; value: string }) {
   );
 }
 
-function StatBar({ label, value, color, top }: { label: string; value: number; color: string; top: boolean }) {
+export function StatBar({ label, value, color, top }: { label: string; value: number; color: string; top: boolean }) {
   const reduce = usePrefersReducedMotion();
   const spring = useSpring({
     from: { width: "0%" },

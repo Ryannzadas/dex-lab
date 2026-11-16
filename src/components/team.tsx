@@ -1,7 +1,7 @@
 import { animated, useTransition } from "@react-spring/web";
 import { useState } from "react";
 import { defenseTable, offensiveCoverage, suggestTypes } from "@/lib/analysis";
-import { artworkUrl, displayName, type Pokemon } from "@/lib/pokeapi";
+import { artworkUrl, displayName, speciesIdOf, type Pokemon } from "@/lib/pokeapi";
 import { usePrefersReducedMotion } from "@/lib/state";
 import { TYPE_INFO } from "@/lib/types";
 import { PokemonSearch } from "./search";
@@ -16,9 +16,10 @@ type Props = {
   onAdd: (id: number) => void;
   onRemove: (id: number) => void;
   onClear: () => void;
+  onOpen: (speciesId: number) => void;
 };
 
-export function TeamTab({ ids, team, pending, onAdd, onRemove, onClear }: Props) {
+export function TeamTab({ ids, team, pending, onAdd, onRemove, onClear, onOpen }: Props) {
   return (
     <div className="grid grid-cols-1 gap-6">
       <Card>
@@ -49,7 +50,7 @@ export function TeamTab({ ids, team, pending, onAdd, onRemove, onClear }: Props)
           placeholder={ids.length >= MAX ? "Time completo! Remova alguém para trocar." : undefined}
         />
 
-        <Slots team={team} pending={pending} onRemove={onRemove} />
+        <Slots team={team} pending={pending} onRemove={onRemove} onOpen={onOpen} />
       </Card>
 
       {team.length > 0 ? <Analysis team={team} /> : <EmptyHint />}
@@ -57,7 +58,17 @@ export function TeamTab({ ids, team, pending, onAdd, onRemove, onClear }: Props)
   );
 }
 
-function Slots({ team, pending, onRemove }: { team: Pokemon[]; pending: number[]; onRemove: (id: number) => void }) {
+function Slots({
+  team,
+  pending,
+  onRemove,
+  onOpen,
+}: {
+  team: Pokemon[];
+  pending: number[];
+  onRemove: (id: number) => void;
+  onOpen: (speciesId: number) => void;
+}) {
   const reduce = usePrefersReducedMotion();
   const transitions = useTransition(team, {
     keys: (p) => p.id,
@@ -73,7 +84,7 @@ function Slots({ team, pending, onRemove }: { team: Pokemon[]; pending: number[]
     <ul className="mt-5 grid grid-cols-3 gap-2 sm:gap-3 lg:grid-cols-6">
       {transitions((style, p) => (
         <animated.li style={style} className="group relative">
-          <MemberCard pokemon={p} onRemove={() => onRemove(p.id)} />
+          <MemberCard pokemon={p} onRemove={() => onRemove(p.id)} onOpen={() => onOpen(speciesIdOf(p))} />
         </animated.li>
       ))}
       {pending.map((id) => (
@@ -92,7 +103,7 @@ function Slots({ team, pending, onRemove }: { team: Pokemon[]; pending: number[]
   );
 }
 
-function MemberCard({ pokemon, onRemove }: { pokemon: Pokemon; onRemove: () => void }) {
+function MemberCard({ pokemon, onRemove, onOpen }: { pokemon: Pokemon; onRemove: () => void; onOpen: () => void }) {
   const main = TYPE_INFO[pokemon.types[0]].color;
   return (
     <div
@@ -120,6 +131,12 @@ function MemberCard({ pokemon, onRemove }: { pokemon: Pokemon; onRemove: () => v
           <TypeBadge key={t} type={t} size="sm" />
         ))}
       </div>
+      <button
+        type="button"
+        onClick={onOpen}
+        aria-label={`Ver resumo de ${displayName(pokemon.name)}`}
+        className="absolute inset-0 rounded-2xl"
+      />
       <button
         type="button"
         onClick={onRemove}
