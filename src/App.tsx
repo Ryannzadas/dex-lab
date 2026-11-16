@@ -4,9 +4,10 @@ import { Blobs } from "@/components/blobs";
 import { CompareTab } from "@/components/compare";
 import { SummaryView } from "@/components/summary";
 import { TeamTab } from "@/components/team";
+import { TeamManager } from "@/components/team-manager";
 import { ArrowIcon } from "@/components/ui";
 import { useIdList, usePrefersReducedMotion, useTheme } from "@/lib/state";
-import { useTeam } from "@/lib/team";
+import { useTeams } from "@/lib/team";
 import type { TypeName } from "@/lib/types";
 import { usePokemons } from "@/lib/use-pokemon";
 
@@ -31,7 +32,7 @@ export default function App() {
   const [summaryId, setSummaryId] = useState<number | null>(readSummary);
   const [formId, setFormId] = useState<number | null>(readForm);
   const [summaryTypes, setSummaryTypes] = useState<TypeName[]>([]);
-  const team = useTeam();
+  const team = useTeams();
   const compare = useIdList("comparar", 4);
   const teamData = usePokemons(team.ids);
   const compareData = usePokemons(compare.ids);
@@ -109,7 +110,10 @@ export default function App() {
             <Hero />
             <div role="tabpanel" id={`painel-${tab}`} aria-labelledby={`aba-${tab}`} className="scroll-mt-24">
               {tab === "time" ? (
-                <TeamTab
+                <div className="grid grid-cols-1 gap-6">
+                  <TeamManager api={team} loaded={teamData.list} />
+                  <TeamTab
+                  key={team.active.id}
                   members={team.members}
                   team={teamData.list}
                   pending={teamData.pending}
@@ -119,6 +123,7 @@ export default function App() {
                   onUpdate={team.update}
                   onOpen={openSummary}
                 />
+                </div>
               ) : (
                 <CompareTab
                   ids={compare.ids}

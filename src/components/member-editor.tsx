@@ -109,6 +109,9 @@ export function MemberEditor({ member, pokemon, onChange, onRemove, onOpenSummar
             onChange={(e) => onChange({ ability: e.target.value || null })}
           >
             <option value="">Escolher…</option>
+            {member.ability && !pokemon.abilities.some((a) => a.name === member.ability) && (
+              <option value={member.ability}>{displayName(member.ability)} (não é deste Pokémon)</option>
+            )}
             {pokemon.abilities.map((a) => (
               <option key={a.name} value={a.name}>
                 {displayName(a.name)}
@@ -173,6 +176,10 @@ export function MemberEditor({ member, pokemon, onChange, onRemove, onOpenSummar
                   disabled={learnset.length === 0}
                 >
                   <option value="">{learnset.length ? `Golpe ${i + 1}` : "Carregando golpes…"}</option>
+                  {/* Golpe importado que não está na lista do jogo de referência: continua visível para poder trocar. */}
+                  {move && learnset.length > 0 && !learnset.includes(move) && (
+                    <option value={move}>{displayName(move)} (não aprende no jogo de referência)</option>
+                  )}
                   {learnset
                     .filter((m) => !taken.includes(m))
                     .map((m) => (

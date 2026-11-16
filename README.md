@@ -24,6 +24,13 @@ Clique num membro do time para abrir o editor dele (inspirado no montador da Fir
 
 Com golpes escolhidos, a cobertura da análise passa a usar os **golpes de dano** do time e avisa quem ainda está sem golpe. A configuração inteira vai junto no link de compartilhar.
 
+#### Vários times e Showdown
+
+- **Meus times:** guarde vários times no navegador, cada um com nome, e crie, troque, renomeie, duplique ou exclua quando quiser.
+- **Importar do Showdown:** cole um time no formato de texto do Pokémon Showdown e ele vira um time novo, com apelido, item, habilidade, nível, shiny, Tipo Tera, EVs, natureza, IVs e golpes. O que não for reconhecido aparece como aviso.
+- **Exportar:** gera o texto do time aberto para colar no Teambuilder do Showdown.
+- **Link compartilhado:** quem abre um link de time ganha ele como um time novo na lista, sem perder os seus.
+
 ### Aba Comparar
 
 Você coloca de dois a quatro Pokémon lado a lado e compara:

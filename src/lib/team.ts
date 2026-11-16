@@ -2,10 +2,11 @@ import { useCallback, useEffect, useState } from "react";
 import type { StatKey } from "./pokeapi";
 
 /**
- * O time com a configuração completa de cada membro.
- * - Fica salvo no navegador (tudo) e no link: `?time=6,9` com os ids e,
+ * Vários times salvos, cada um com a configuração completa de cada membro.
+ * - Todos ficam no navegador; o time aberto também vai no link: `?time=6,9` com os ids e,
  *   se algum membro foi configurado, `&sets=` com o resto (JSON em base64).
- * - Times antigos (só ids) continuam abrindo.
+ * - Abrir um link de time que a pessoa ainda não tem adiciona ele como um time novo.
+ * - O formato antigo (um time só) é migrado para "Time 1".
  */
 
 export type Member = {
@@ -23,8 +24,12 @@ export type Member = {
 };
 
 export const MAX_TEAM = 6;
-const STORAGE_KEY = "dexlab:time:v2";
+export const MAX_TEAMS = 30;
+const TEAMS_KEY = "dexlab:times:v3";
+const V2_KEY = "dexlab:time:v2";
 const OLD_KEY = "dexlab:time";
+
+export type SavedTeam = { id: string; name: string; members: Member[]; updatedAt: number };
 
 export function newMember(id: number): Member {
   return { id, nickname: "", level: 50, ability: null, item: "", nature: "hardy", tera: null, shiny: false, moves: [], evs: {}, ivs: {} };
@@ -80,74 +85,208 @@ function sanitize(raw: unknown, id: number): Member {
   };
 }
 
-function readInitial(): Member[] {
+function makeId() {
+  return Math.random().toString(36).slice(2, 10);
+}
+
+function cleanMembers(raw: unknown): Member[] {
+  if (!Array.isArray(raw)) return [];
+  const seen = new Set<number>();
+  const out: Member[] = [];
+  for (const m of raw) {
+    if (!m || !Number.isInteger(m.id) || m.id <= 0 || seen.has(m.id)) continue;
+    seen.add(m.id);
+    out.push(sanitize(m, m.id));
+    if (out.length >= MAX_TEAM) break;
+  }
+  return out;
+}
+
+/** Time que veio no link (?time=…&sets=…), se houver. */
+function readUrlTeam(): Member[] | null {
   const params = new URLSearchParams(window.location.search);
   const idsRaw = params.get("time");
-  if (idsRaw !== null) {
-    const ids = idsRaw
-      .split(",")
-      .map(Number)
-      .filter((n) => Number.isInteger(n) && n > 0)
-      .slice(0, MAX_TEAM);
-    let sets: unknown[] = [];
-    try {
-      const s = params.get("sets");
-      if (s) sets = (decode(s) as unknown[]) ?? [];
-    } catch {
-      // link com sets quebrado: abre só com os Pokémon
-    }
-    return ids.map((id, i) => sanitize(Array.isArray(sets) ? sets[i] : null, id));
-  }
-
+  if (idsRaw === null) return null;
+  const ids = [...new Set(idsRaw.split(",").map(Number).filter((n) => Number.isInteger(n) && n > 0))].slice(0, MAX_TEAM);
+  let sets: unknown[] = [];
   try {
-    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "null");
-    if (Array.isArray(saved)) {
-      return saved
-        .filter((m) => m && Number.isInteger(m.id) && m.id > 0)
-        .slice(0, MAX_TEAM)
-        .map((m) => sanitize(m, m.id));
+    const s = params.get("sets");
+    if (s) {
+      const decoded = decode(s);
+      if (Array.isArray(decoded)) sets = decoded;
     }
-    const old = JSON.parse(localStorage.getItem(OLD_KEY) ?? "[]");
-    if (Array.isArray(old)) return old.filter((n) => Number.isInteger(n) && n > 0).slice(0, MAX_TEAM).map(newMember);
+  } catch {
+    // link com sets quebrado: abre só com os Pokémon
+  }
+  return ids.map((id, i) => sanitize(sets[i], id));
+}
+
+function readLegacy(): Member[] {
+  try {
+    const v2 = JSON.parse(localStorage.getItem(V2_KEY) ?? "null");
+    if (Array.isArray(v2)) return cleanMembers(v2);
+    const old = JSON.parse(localStorage.getItem(OLD_KEY) ?? "null");
+    if (Array.isArray(old)) return cleanMembers(old.map((id: unknown) => ({ id })));
   } catch {
     // storage ilegível
   }
   return [];
 }
 
-export function useTeam() {
-  const [members, setMembers] = useState<Member[]>(readInitial);
+type TeamsState = { teams: SavedTeam[]; activeId: string };
 
+function nextName(teams: SavedTeam[], base = "Time") {
+  let n = teams.length + 1;
+  while (teams.some((t) => t.name === `${base} ${n}`)) n++;
+  return `${base} ${n}`;
+}
+
+const signature = (members: Member[]) => JSON.stringify(members);
+
+function readInitial(): TeamsState {
+  let teams: SavedTeam[] = [];
+  let activeId = "";
+  try {
+    const saved = JSON.parse(localStorage.getItem(TEAMS_KEY) ?? "null");
+    if (saved && Array.isArray(saved.teams)) {
+      teams = (saved.teams as SavedTeam[])
+        .filter((t) => t && typeof t.id === "string")
+        .slice(0, MAX_TEAMS)
+        .map((t) => ({
+          id: t.id,
+          name: typeof t.name === "string" && t.name.trim() ? t.name.slice(0, 40) : "Time",
+          members: cleanMembers(t.members),
+          updatedAt: Number(t.updatedAt) || Date.now(),
+        }));
+      activeId = typeof saved.activeId === "string" ? saved.activeId : "";
+    }
+  } catch {
+    // storage ilegível: começa do zero
+  }
+
+  if (teams.length === 0) {
+    teams = [{ id: makeId(), name: "Time 1", members: readLegacy(), updatedAt: Date.now() }];
+  }
+
+  // Link compartilhado: abre o time se já existir; senão, adiciona como time novo.
+  const shared = readUrlTeam();
+  if (shared && shared.length) {
+    const same = teams.find((t) => signature(t.members) === signature(shared));
+    if (same) activeId = same.id;
+    else if (teams.length < MAX_TEAMS) {
+      const team = { id: makeId(), name: nextName(teams, "Compartilhado"), members: shared, updatedAt: Date.now() };
+      teams = [...teams, team];
+      activeId = team.id;
+    }
+  }
+
+  if (!teams.some((t) => t.id === activeId)) activeId = teams[0].id;
+  return { teams, activeId };
+}
+
+export function useTeams() {
+  const [state, setState] = useState<TeamsState>(readInitial);
+  const active = state.teams.find((t) => t.id === state.activeId) ?? state.teams[0];
+  const members = active.members;
+
+  // Salva tudo no navegador e coloca o time aberto no link.
   useEffect(() => {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(members));
+      localStorage.setItem(TEAMS_KEY, JSON.stringify(state));
     } catch {
       // modo privado: segue só com o link
     }
+    const team = state.teams.find((t) => t.id === state.activeId) ?? state.teams[0];
     const url = new URL(window.location.href);
-    if (members.length) {
-      url.searchParams.set("time", members.map((m) => m.id).join(","));
-      if (members.some(isCustomized)) {
-        url.searchParams.set("sets", encode(members.map((m) => (isCustomized(m) ? { ...m, id: undefined } : 0))));
+    if (team.members.length) {
+      url.searchParams.set("time", team.members.map((m) => m.id).join(","));
+      if (team.members.some(isCustomized)) {
+        url.searchParams.set("sets", encode(team.members.map((m) => (isCustomized(m) ? { ...m, id: undefined } : 0))));
       } else url.searchParams.delete("sets");
     } else {
       url.searchParams.delete("time");
       url.searchParams.delete("sets");
     }
     window.history.replaceState(window.history.state, "", url);
-  }, [members]);
+  }, [state]);
+
+  /** Muda os membros do time aberto. */
+  const editMembers = useCallback((fn: (cur: Member[]) => Member[]) => {
+    setState((s) => ({
+      ...s,
+      teams: s.teams.map((t) => (t.id === s.activeId ? { ...t, members: fn(t.members), updatedAt: Date.now() } : t)),
+    }));
+  }, []);
 
   const add = useCallback(
-    (id: number) =>
-      setMembers((cur) => (cur.length >= MAX_TEAM || cur.some((m) => m.id === id) ? cur : [...cur, newMember(id)])),
-    [],
+    (id: number) => editMembers((cur) => (cur.length >= MAX_TEAM || cur.some((m) => m.id === id) ? cur : [...cur, newMember(id)])),
+    [editMembers],
   );
-  const remove = useCallback((id: number) => setMembers((cur) => cur.filter((m) => m.id !== id)), []);
-  const clear = useCallback(() => setMembers([]), []);
+  const remove = useCallback((id: number) => editMembers((cur) => cur.filter((m) => m.id !== id)), [editMembers]);
+  const clear = useCallback(() => editMembers(() => []), [editMembers]);
   const update = useCallback(
-    (id: number, patch: Partial<Member>) => setMembers((cur) => cur.map((m) => (m.id === id ? { ...m, ...patch, id } : m))),
-    [],
+    (id: number, patch: Partial<Member>) => editMembers((cur) => cur.map((m) => (m.id === id ? { ...m, ...patch, id } : m))),
+    [editMembers],
   );
 
-  return { members, ids: members.map((m) => m.id), add, remove, clear, update, full: members.length >= MAX_TEAM };
+  const select = useCallback((id: string) => setState((s) => (s.teams.some((t) => t.id === id) ? { ...s, activeId: id } : s)), []);
+
+  /** Cria um time (vazio ou com membros, como no import) e já abre ele. */
+  const create = useCallback((name?: string, initial: Member[] = []) => {
+    setState((s) => {
+      if (s.teams.length >= MAX_TEAMS) return s;
+      const team = { id: makeId(), name: name?.trim() || nextName(s.teams), members: cleanMembers(initial), updatedAt: Date.now() };
+      return { teams: [...s.teams, team], activeId: team.id };
+    });
+  }, []);
+
+  const duplicate = useCallback((id: string) => {
+    setState((s) => {
+      const src = s.teams.find((t) => t.id === id);
+      if (!src || s.teams.length >= MAX_TEAMS) return s;
+      const copy = { ...src, id: makeId(), name: `${src.name} (cópia)`.slice(0, 40), updatedAt: Date.now() };
+      const at = s.teams.indexOf(src) + 1;
+      return { teams: [...s.teams.slice(0, at), copy, ...s.teams.slice(at)], activeId: copy.id };
+    });
+  }, []);
+
+  const rename = useCallback((id: string, name: string) => {
+    const clean = name.trim().slice(0, 40);
+    if (!clean) return;
+    setState((s) => ({ ...s, teams: s.teams.map((t) => (t.id === id ? { ...t, name: clean } : t)) }));
+  }, []);
+
+  /** Exclui um time. Se era o último, fica um "Time 1" vazio no lugar. */
+  const removeTeam = useCallback((id: string) => {
+    setState((s) => {
+      const rest = s.teams.filter((t) => t.id !== id);
+      if (rest.length === 0) {
+        const fresh = { id: makeId(), name: "Time 1", members: [], updatedAt: Date.now() };
+        return { teams: [fresh], activeId: fresh.id };
+      }
+      const idx = s.teams.findIndex((t) => t.id === id);
+      const activeId = s.activeId === id ? rest[Math.max(0, idx - 1)].id : s.activeId;
+      return { teams: rest, activeId };
+    });
+  }, []);
+
+  return {
+    teams: state.teams,
+    active,
+    members,
+    ids: members.map((m) => m.id),
+    full: members.length >= MAX_TEAM,
+    canCreate: state.teams.length < MAX_TEAMS,
+    add,
+    remove,
+    clear,
+    update,
+    select,
+    create,
+    duplicate,
+    rename,
+    removeTeam,
+  };
 }
+
+export type TeamsApi = ReturnType<typeof useTeams>;
