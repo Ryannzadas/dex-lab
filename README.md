@@ -30,6 +30,7 @@ Com golpes escolhidos, a cobertura da análise passa a usar os **golpes de dano*
 - **Importar do Showdown:** cole um time no formato de texto do Pokémon Showdown e ele vira um time novo, com apelido, item, habilidade, nível, shiny, Tipo Tera, EVs, natureza, IVs e golpes. O que não for reconhecido aparece como aviso.
 - **Exportar:** gera o texto do time aberto para colar no Teambuilder do Showdown.
 - **Link compartilhado:** quem abre um link de time ganha ele como um time novo na lista, sem perder os seus.
+- **Imagem do time:** gera um card de 1200×675 com o time inteiro (arte, shiny, nível, natureza, tipos, item e golpes) para baixar em PNG ou copiar e colar no Discord.
 
 ### Aba Comparar
 
@@ -69,7 +70,7 @@ O time e a comparação ficam salvos no navegador e no link (`?time=6,9,3`). É 
 
 ### Tema
 
-Tem tema claro e escuro. Por padrão, segue o do sistema.
+O botão do menu alterna entre **claro**, **escuro** e **do sistema**. No modo "do sistema", o site acompanha o tema do aparelho e muda sozinho junto com ele.
 
 ## Referências de design
 

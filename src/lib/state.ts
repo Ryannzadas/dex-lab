@@ -51,21 +51,53 @@ export function useIdList(param: string, max: number) {
   return { ids, add, remove, clear, full: ids.length >= max };
 }
 
+export type ThemeMode = "claro" | "escuro" | "sistema";
+const THEME_ORDER: ThemeMode[] = ["claro", "escuro", "sistema"];
+
+function readMode(): ThemeMode {
+  try {
+    const t = localStorage.getItem("dexlab:tema");
+    if (t === "claro" || t === "escuro" || t === "sistema") return t;
+  } catch {
+    // sem storage
+  }
+  return "sistema";
+}
+
+/**
+ * Tema com três opções: claro, escuro ou "do sistema" (segue o aparelho e muda junto com ele).
+ * O botão alterna na ordem claro → escuro → sistema.
+ */
 export function useTheme() {
-  const [dark, setDark] = useState(() => document.documentElement.classList.contains("dark"));
-  const toggle = useCallback(() => {
-    setDark((d) => {
-      const next = !d;
-      document.documentElement.classList.toggle("dark", next);
+  const [mode, setMode] = useState<ThemeMode>(readMode);
+  const [systemDark, setSystemDark] = useState(() => window.matchMedia("(prefers-color-scheme: dark)").matches);
+
+  useEffect(() => {
+    const mq = window.matchMedia("(prefers-color-scheme: dark)");
+    const onChange = (e: MediaQueryListEvent) => setSystemDark(e.matches);
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
+  }, []);
+
+  const dark = mode === "escuro" || (mode === "sistema" && systemDark);
+
+  useEffect(() => {
+    document.documentElement.classList.toggle("dark", dark);
+  }, [dark]);
+
+  const cycle = useCallback(() => {
+    setMode((m) => {
+      const next = THEME_ORDER[(THEME_ORDER.indexOf(m) + 1) % THEME_ORDER.length];
       try {
-        localStorage.setItem("dexlab:tema", next ? "escuro" : "claro");
+        localStorage.setItem("dexlab:tema", next);
       } catch {
         // sem storage: vale só nesta visita
       }
       return next;
     });
   }, []);
-  return { dark, toggle };
+
+  return { dark, mode, cycle };
 }
 
 export function usePrefersReducedMotion() {

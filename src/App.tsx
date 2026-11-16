@@ -7,7 +7,7 @@ import { TeamTab } from "@/components/team";
 import { TeamManager } from "@/components/team-manager";
 import { Pokedex } from "@/components/pokedex";
 import { ArrowIcon } from "@/components/ui";
-import { useIdList, usePrefersReducedMotion, useTheme } from "@/lib/state";
+import { useIdList, usePrefersReducedMotion, useTheme, type ThemeMode } from "@/lib/state";
 import { useTeams } from "@/lib/team";
 import type { TypeName } from "@/lib/types";
 import { usePokemons } from "@/lib/use-pokemon";
@@ -98,7 +98,7 @@ export default function App() {
   return (
     <>
       <Blobs types={activeTypes} />
-      <Toolbar tab={summaryId !== null ? null : tab} setTab={goToTab} dark={theme.dark} toggleTheme={theme.toggle} />
+      <Toolbar tab={summaryId !== null ? null : tab} setTab={goToTab} themeMode={theme.mode} toggleTheme={theme.cycle} />
 
       <main className="mx-auto max-w-6xl px-4 pb-16 sm:px-6">
         {summaryId !== null ? (
@@ -166,16 +166,18 @@ export default function App() {
   );
 }
 
+const THEME_LABEL: Record<ThemeMode, string> = { claro: "claro", escuro: "escuro", sistema: "do sistema" };
+
 /** Barra de ícones flutuante (estilo react-spring.dev). */
 function Toolbar({
   tab,
   setTab,
-  dark,
+  themeMode,
   toggleTheme,
 }: {
   tab: Tab | null;
   setTab: (t: Tab) => void;
-  dark: boolean;
+  themeMode: ThemeMode;
   toggleTheme: () => void;
 }) {
   const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
@@ -251,17 +253,25 @@ function Toolbar({
           <button
             type="button"
             onClick={toggleTheme}
-            aria-label={dark ? "Usar tema claro" : "Usar tema escuro"}
+            aria-label={`Tema: ${THEME_LABEL[themeMode]}. Trocar tema`}
+            title={`Tema: ${THEME_LABEL[themeMode]} (clique para trocar)`}
             className="grid size-9 place-items-center rounded-xl text-muted transition-colors hover:bg-line/60 hover:text-ink"
           >
-            {dark ? (
+            {themeMode === "claro" && (
               <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
                 <circle cx="12" cy="12" r="4" />
                 <path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" strokeLinecap="round" />
               </svg>
-            ) : (
+            )}
+            {themeMode === "escuro" && (
               <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
                 <path d="M20 14.5A8 8 0 0 1 9.5 4 8 8 0 1 0 20 14.5Z" strokeLinejoin="round" />
+              </svg>
+            )}
+            {themeMode === "sistema" && (
+              <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                <rect x="3" y="4" width="18" height="12" rx="2" />
+                <path d="M8 20h8M12 16v4" strokeLinecap="round" />
               </svg>
             )}
           </button>

@@ -1,10 +1,12 @@
-import { useId, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { getPokemonList, type Pokemon } from "@/lib/pokeapi";
 import { exportShowdown, importShowdown } from "@/lib/showdown";
 import type { TeamsApi } from "@/lib/team";
+import { drawTeamCard } from "@/lib/team-image";
+import { useMoveInfos } from "@/lib/use-moves";
 import { Card } from "./ui";
 
-type Panel = null | "rename" | "import" | "export" | "delete";
+type Panel = null | "rename" | "import" | "export" | "delete" | "image";
 
 const small =
   "inline-flex items-center gap-1.5 rounded-xl border border-line px-3 py-1.5 text-sm font-medium transition-colors hover:border-ink disabled:cursor-not-allowed disabled:opacity-45";
@@ -25,6 +27,9 @@ export function TeamManager({ api, loaded }: { api: TeamsApi; loaded: Pokemon[] 
           </button>
           <button type="button" className={small} onClick={() => toggle("export")} aria-expanded={panel === "export"} disabled={active.members.length === 0}>
             Exportar
+          </button>
+          <button type="button" className={small} onClick={() => toggle("image")} aria-expanded={panel === "image"} disabled={active.members.length === 0}>
+            Imagem
           </button>
         </div>
       </div>
@@ -97,6 +102,7 @@ export function TeamManager({ api, loaded }: { api: TeamsApi; loaded: Pokemon[] 
       )}
       {panel === "export" && <ExportPanel api={api} loaded={loaded} />}
       {panel === "import" && <ImportPanel api={api} onDone={() => setPanel(null)} />}
+      {panel === "image" && <ImagePanel key={active.id + active.updatedAt} api={api} loaded={loaded} />}
     </Card>
   );
 }
@@ -249,6 +255,79 @@ function ImportPanel({ api, onDone }: { api: TeamsApi; onDone: () => void }) {
           ))}
         </ul>
       )}
+    </div>
+  );
+}
+
+/** Gera o card do time como imagem: prévia, baixar PNG e copiar para colar no Discord. */
+function ImagePanel({ api, loaded }: { api: TeamsApi; loaded: Pokemon[] }) {
+  const [url, setUrl] = useState<string | null>(null);
+  const [blob, setBlob] = useState<Blob | null>(null);
+  const [status, setStatus] = useState<"idle" | "copied" | "error">("idle");
+  const moveNames = api.members.flatMap((m) => m.moves).filter(Boolean);
+  const moves = useMoveInfos(moveNames);
+  const pokemons = Object.fromEntries(loaded.map((p) => [p.id, p]));
+  const ready = api.members.every((m) => pokemons[m.id]) && moveNames.every((n) => moves[n]);
+  const readyKey = ready ? Object.keys(moves).sort().join() : "";
+
+  useEffect(() => {
+    if (!ready) return;
+    let alive = true;
+    let objectUrl: string | null = null;
+    drawTeamCard({ teamName: api.active.name, members: api.members, pokemons, moves })
+      .then((canvas) => canvas.toBlob((b) => {
+        if (!alive || !b) return;
+        objectUrl = URL.createObjectURL(b);
+        setBlob(b);
+        setUrl(objectUrl);
+      }, "image/png"))
+      .catch(() => alive && setStatus("error"));
+    return () => {
+      alive = false;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+    // Redesenha quando os dados ficam prontos; o painel é recriado (key) quando o time muda.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ready, readyKey]);
+
+  const fileName = `${api.active.name.replace(/[^\p{L}\p{N}]+/gu, "-").replace(/^-|-$/g, "") || "time"}-dex-lab.png`;
+
+  const copy = async () => {
+    try {
+      if (!blob || !("ClipboardItem" in window)) throw new Error("sem suporte");
+      await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
+      setStatus("copied");
+      setTimeout(() => setStatus("idle"), 1800);
+    } catch {
+      setStatus("error");
+    }
+  };
+
+  return (
+    <div className="mt-4">
+      <div className="overflow-hidden rounded-2xl border border-line bg-black/80">
+        {url ? (
+          <img src={url} alt={`Card do time ${api.active.name}`} width={1200} height={675} className="block h-auto w-full" />
+        ) : (
+          <div className="grid aspect-[16/9] place-items-center text-sm text-white/60">Montando a imagem…</div>
+        )}
+      </div>
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <a
+          href={url ?? undefined}
+          download={fileName}
+          aria-disabled={!url}
+          className={`rounded-xl bg-ink px-4 py-2 text-sm font-semibold text-bg ${url ? "" : "pointer-events-none opacity-45"}`}
+        >
+          Baixar PNG
+        </a>
+        <button type="button" className={small} onClick={copy} disabled={!blob} aria-live="polite">
+          {status === "copied" ? "Copiada!" : "Copiar imagem"}
+        </button>
+        {status === "error" && (
+          <span className="text-xs text-muted">Este navegador não deixou copiar. Use "Baixar PNG".</span>
+        )}
+      </div>
     </div>
   );
 }
