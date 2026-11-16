@@ -39,8 +39,8 @@ export default function App() {
   const [formId, setFormId] = useState<number | null>(readForm);
   const [summaryTypes, setSummaryTypes] = useState<TypeName[]>([]);
   const [dexTypes, setDexTypes] = useState<TypeName[]>([]);
-  const team = useTeams();
-  const compare = useIdList("comparar", 4);
+  const team = useTeams(tab === "time");
+  const compare = useIdList("comparar", 4, tab === "comparar");
   const teamData = usePokemons(team.ids);
   const gameCtx = useGame(team.active.game);
   const compareData = usePokemons(compare.ids);
@@ -48,14 +48,19 @@ export default function App() {
 
   useEffect(() => {
     const url = new URL(window.location.href);
-    if (tab !== "inicio") url.searchParams.set("aba", tab);
-    else url.searchParams.delete("aba");
+    if (tab !== "inicio") {
+      url.searchParams.set("aba", tab);
+      url.hash = "";
+    } else {
+      url.searchParams.delete("aba");
+      ["time", "sets", "jogo", "comparar"].forEach((k) => url.searchParams.delete(k));
+    }
     // Filtros da Pokédex só fazem sentido na aba dela.
     if (tab !== "pokedex") ["regiao", "tipo", "formas", "lendarios"].forEach((k) => url.searchParams.delete(k));
     window.history.replaceState(window.history.state, "", url);
   }, [tab]);
 
-  // O resumo vive no link (?pokemon=6), então o botão "voltar" do navegador fecha ele.
+  // O resumo e as abas vivem no link, então o botão "voltar" do navegador funciona entre eles.
   useEffect(() => {
     if ("scrollRestoration" in window.history) {
       window.history.scrollRestoration = "manual";
@@ -64,6 +69,7 @@ export default function App() {
       const nextSummary = readSummary();
       setSummaryId(nextSummary);
       setFormId(readForm());
+      setTab(readTab());
       if (nextSummary !== null) {
         window.scrollTo({ top: 0, left: 0, behavior: "instant" });
         requestAnimationFrame(() => window.scrollTo({ top: 0, left: 0, behavior: "instant" }));

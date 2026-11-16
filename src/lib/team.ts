@@ -187,12 +187,12 @@ function readInitial(): TeamsState {
   return { teams, activeId };
 }
 
-export function useTeams() {
+export function useTeams(syncUrl = true) {
   const [state, setState] = useState<TeamsState>(readInitial);
   const active = state.teams.find((t) => t.id === state.activeId) ?? state.teams[0];
   const members = active.members;
 
-  // Salva tudo no navegador e coloca o time aberto no link.
+  // Salva tudo no navegador e coloca o time aberto no link apenas quando a aba Time está ativa.
   useEffect(() => {
     try {
       localStorage.setItem(TEAMS_KEY, JSON.stringify(state));
@@ -201,7 +201,7 @@ export function useTeams() {
     }
     const team = state.teams.find((t) => t.id === state.activeId) ?? state.teams[0];
     const url = new URL(window.location.href);
-    if (team.members.length) {
+    if (syncUrl && team.members.length) {
       url.searchParams.set("time", team.members.map((m) => m.id).join(","));
       if (team.members.some(isCustomized)) {
         url.searchParams.set("sets", encode(team.members.map((m) => (isCustomized(m) ? { ...m, id: undefined } : 0))));
@@ -210,10 +210,10 @@ export function useTeams() {
       url.searchParams.delete("time");
       url.searchParams.delete("sets");
     }
-    if (team.game) url.searchParams.set("jogo", team.game);
+    if (syncUrl && team.game) url.searchParams.set("jogo", team.game);
     else url.searchParams.delete("jogo");
     window.history.replaceState(window.history.state, "", url);
-  }, [state]);
+  }, [state, syncUrl]);
 
   /** Muda os membros do time aberto. */
   const editMembers = useCallback((fn: (cur: Member[]) => Member[]) => {

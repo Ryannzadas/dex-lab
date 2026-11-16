@@ -23,7 +23,7 @@ function readStorage(key: string): number[] {
   }
 }
 
-export function useIdList(param: string, max: number) {
+export function useIdList(param: string, max: number, syncUrl = true) {
   const storageKey = `dexlab:${param}`;
   const [ids, setIds] = useState<number[]>(
     () => (readUrl(param) ?? readStorage(storageKey)).slice(0, max),
@@ -36,10 +36,10 @@ export function useIdList(param: string, max: number) {
       // modo privado: segue só com o link
     }
     const url = new URL(window.location.href);
-    if (ids.length) url.searchParams.set(param, ids.join(","));
+    if (syncUrl && ids.length) url.searchParams.set(param, ids.join(","));
     else url.searchParams.delete(param);
     window.history.replaceState(window.history.state, "", url);
-  }, [ids, param, storageKey]);
+  }, [ids, param, storageKey, syncUrl]);
 
   const add = useCallback(
     (id: number) => setIds((cur) => (cur.length >= max || cur.includes(id) ? cur : [...cur, id])),
