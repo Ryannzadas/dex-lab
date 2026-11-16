@@ -24,6 +24,15 @@ Clique num membro do time para abrir o editor dele (inspirado no montador da Fir
 
 Com golpes escolhidos, a cobertura da análise passa a usar os **golpes de dano** do time e avisa quem ainda está sem golpe. A configuração inteira vai junto no link de compartilhar.
 
+#### Calculadora de dano
+
+Escolha um golpe de um membro do time e um Pokémon alvo para ver o dano:
+
+- **O que entra na conta:** fórmula oficial com nível, natureza, EVs, IVs, STAB (com Tera), efetividade e itens (Life Orb, Choice Band/Specs, Expert Belt).
+- **Alvo:** o investimento dele é escolhido entre três opções prontas.
+- **Resultado:** a faixa em % da vida, a barra de HP e o veredito (OHKO garantido, chance de OHKO, 2HKO…).
+- **O que fica de fora:** habilidades, clima, campo e críticos.
+
 #### Velocidade e Tera
 
 - **Quem ataca primeiro:** escada com a velocidade final de cada membro (nível, natureza, EVs, IVs e Choice Scarf) ao lado da velocidade máxima de Pokémon comuns no competitivo, como Dragapult, Flutter Mane e Garchomp.
@@ -76,6 +85,10 @@ O time e a comparação ficam salvos no navegador e no link (`?time=6,9,3`). É 
 ### Tema
 
 O botão do menu alterna entre **claro**, **escuro** e **do sistema**. No modo "do sistema", o site acompanha o tema do aparelho e muda sozinho junto com ele.
+
+### Instalar como app
+
+O Dex Lab é um PWA: no celular, use "Adicionar à tela inicial"; no computador, use o ícone de instalar na barra de endereço. Ele abre como app, e o que já foi visto (Pokémon, golpes, imagens e fontes) continua funcionando sem internet.
 
 ## Referências de design
 
