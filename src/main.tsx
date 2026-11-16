@@ -3,6 +3,16 @@ import { createRoot } from 'react-dom/client'
 import "./index.css"
 import App from "./App"
 
+// Quando um novo Service Worker assume, recarrega a página para aplicar a atualização na hora.
+if ("serviceWorker" in navigator) {
+  let refreshing = false;
+  navigator.serviceWorker.addEventListener("controllerchange", () => {
+    if (refreshing) return;
+    refreshing = true;
+    window.location.reload();
+  });
+}
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <App />

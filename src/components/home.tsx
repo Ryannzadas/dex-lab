@@ -217,6 +217,7 @@ function TeamArc({ ids, shiny }: { ids: number[]; shiny: boolean[] }) {
   });
   const [playingIdx, setPlayingIdx] = useState<number | null>(null);
   const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
+  const [needsClick, setNeedsClick] = useState(false);
 
   useEffect(() => {
     getPokemonList()
@@ -224,7 +225,12 @@ function TeamArc({ ids, shiny }: { ids: number[]; shiny: boolean[] }) {
         for (const p of list) namesRef.current[p.id] = p.name;
       })
       .catch(() => {});
+    const unlock = () => setNeedsClick(false);
+    window.addEventListener("pointerdown", unlock, { passive: true });
+    window.addEventListener("keydown", unlock, { passive: true });
     return () => {
+      window.removeEventListener("pointerdown", unlock);
+      window.removeEventListener("keydown", unlock);
       audioRef.current?.pause();
       audioRef.current = null;
     };
@@ -233,18 +239,40 @@ function TeamArc({ ids, shiny }: { ids: number[]; shiny: boolean[] }) {
   const playCry = (id: number, idx: number) => {
     try {
       audioRef.current?.pause();
-      const canOgg = typeof Audio !== "undefined" && new Audio().canPlayType("audio/ogg") !== "";
+      const canOgg = typeof Audio !== "undefined" && new Audio().canPlayType("audio/ogg; codecs=vorbis") !== "";
       const name = namesRef.current[id];
-      const src = !canOgg && name ? cryMp3Url(name) : cryUrl(id);
-      const audio = new Audio(src);
-      audio.volume = 0.2; // volume suave como no botão de grito do resumo
+      const primary = !canOgg && name ? cryMp3Url(name) : cryUrl(id);
+      const fallback = name ? cryMp3Url(name) : null;
+      const audio = new Audio(primary);
+      audio.volume = 0.25;
       audioRef.current = audio;
       setPlayingIdx(idx);
       audio.onended = () => setPlayingIdx((cur) => (cur === idx ? null : cur));
-      audio.onerror = () => setPlayingIdx((cur) => (cur === idx ? null : cur));
-      audio.play().catch(() => {
-        setPlayingIdx((cur) => (cur === idx ? null : cur));
-      });
+      audio.onerror = () => {
+        if (fallback && audio.src !== fallback) {
+          audio.src = fallback;
+          audio.play().catch(() => setPlayingIdx((cur) => (cur === idx ? null : cur)));
+        } else {
+          setPlayingIdx((cur) => (cur === idx ? null : cur));
+        }
+      };
+      audio.play().then(
+        () => setNeedsClick(false),
+        (err: unknown) => {
+          if (err instanceof DOMException && err.name === "NotAllowedError") {
+            setNeedsClick(true);
+            setPlayingIdx((cur) => (cur === idx ? null : cur));
+          } else if (fallback && audio.src !== fallback) {
+            audio.src = fallback;
+            audio.play().then(
+              () => setNeedsClick(false),
+              () => setPlayingIdx((cur) => (cur === idx ? null : cur)),
+            );
+          } else {
+            setPlayingIdx((cur) => (cur === idx ? null : cur));
+          }
+        },
+      );
     } catch {
       setPlayingIdx(null);
     }
@@ -303,6 +331,11 @@ function TeamArc({ ids, shiny }: { ids: number[]; shiny: boolean[] }) {
           </button>
         );
       })}
+      {needsClick && (
+        <p className="pointer-events-none absolute inset-x-0 -bottom-5 text-center font-mono text-[11px] text-muted">
+          Clique num card uma vez para liberar o som no navegador
+        </p>
+      )}
     </div>
   );
 }

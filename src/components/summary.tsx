@@ -45,17 +45,20 @@ export function SummaryView({ speciesId, initialFormId, onClose, onOpen, onAddTo
   useEffect(() => {
     // O componente é recriado (key) a cada Pokémon, então o estado já começa vazio.
     let alive = true;
+    window.scrollTo({ top: 0, left: 0, behavior: "instant" });
+    const raf = requestAnimationFrame(() => window.scrollTo({ top: 0, left: 0, behavior: "instant" }));
     getSpecies(speciesId)
       .then((s) => {
         if (!alive) return;
         setSpecies(s);
         const wanted = s.varieties.find((v) => v.id === initialFormId);
         setFormId(wanted?.id ?? s.varieties.find((v) => v.isDefault)?.id ?? speciesId);
+        requestAnimationFrame(() => window.scrollTo({ top: 0, left: 0, behavior: "instant" }));
       })
       .catch(() => alive && setError(true));
-    window.scrollTo({ top: 0 });
     return () => {
       alive = false;
+      cancelAnimationFrame(raf);
     };
   }, [speciesId, initialFormId]);
 

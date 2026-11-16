@@ -57,15 +57,24 @@ export default function App() {
 
   // O resumo vive no link (?pokemon=6), então o botão "voltar" do navegador fecha ele.
   useEffect(() => {
+    if ("scrollRestoration" in window.history) {
+      window.history.scrollRestoration = "manual";
+    }
     const onPop = () => {
-      setSummaryId(readSummary());
+      const nextSummary = readSummary();
+      setSummaryId(nextSummary);
       setFormId(readForm());
+      if (nextSummary !== null) {
+        window.scrollTo({ top: 0, left: 0, behavior: "instant" });
+        requestAnimationFrame(() => window.scrollTo({ top: 0, left: 0, behavior: "instant" }));
+      }
     };
     window.addEventListener("popstate", onPop);
     return () => window.removeEventListener("popstate", onPop);
   }, []);
 
   const openSummary = useCallback((speciesId: number, form?: number) => {
+    window.scrollTo({ top: 0, left: 0, behavior: "instant" });
     const url = new URL(window.location.href);
     url.searchParams.set("pokemon", String(speciesId));
     if (form && form !== speciesId) url.searchParams.set("forma", String(form));

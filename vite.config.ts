@@ -33,6 +33,10 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,svg,png,ico}'],
+        cleanupOutdatedCaches: true,
+        clientsClaim: true,
+        skipWaiting: true,
+        importScripts: ['sw-refresh.js'],
         runtimeCaching: [
           {
             // Dados da PokéAPI: usa o que tem guardado e atualiza por trás.
@@ -45,8 +49,8 @@ export default defineConfig({
             },
           },
           {
-            // Artes, sprites e gritos (não mudam): guardados de vez.
-            urlPattern: /^https:\/\/raw\.githubusercontent\.com\/PokeAPI\//,
+            // Artes e sprites (não mudam): guardados de vez. Áudio fica fora para não quebrar Range requests.
+            urlPattern: /^https:\/\/raw\.githubusercontent\.com\/PokeAPI\/sprites\//,
             handler: 'CacheFirst',
             options: {
               cacheName: 'pokeapi-midia',
