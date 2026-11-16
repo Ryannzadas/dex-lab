@@ -30,6 +30,10 @@ export type Pokemon = {
   moves: LearnedMove[];
   /** Jogo de onde vieram os golpes (ex.: "scarlet-violet"). */
   movesVersion: string | null;
+  /** Golpes por grupo de versões, para montar time de um jogo específico. */
+  movesByVersion: Record<string, LearnedMove[]>;
+  /** Tipos antigos: `types` valia até a geração `upToGen` (ex.: Clefairy era Normal até a 5ª). */
+  pastTypes: { upToGen: number; types: TypeName[] }[];
 };
 
 export type EvolutionStage = { id: number; name: string; depth: number; how: string | null };
@@ -134,6 +138,7 @@ type RawPokemon = {
   weight: number;
   species: { url: string };
   cries?: { latest: string | null; legacy: string | null };
+  past_types?: { generation: { name: string }; types: { type: { name: string } }[] }[];
   moves: {
     move: { name: string };
     version_group_details: {
@@ -188,6 +193,44 @@ function pickMoves(raw: RawPokemon["moves"]): { version: string | null; moves: L
   return { version, moves };
 }
 
+const ROMAN = ["i", "ii", "iii", "iv", "v", "vi", "vii", "viii", "ix"];
+
+/** Todos os golpes separados por grupo de versões (sem repetições). */
+function groupMoves(raw: RawPokemon["moves"]): Record<string, LearnedMove[]> {
+  const methods: Record<string, MoveMethod> = { "level-up": "level", machine: "machine", egg: "egg", tutor: "tutor" };
+  const out: Record<string, LearnedMove[]> = {};
+  const seen = new Set<string>();
+  for (const m of raw) {
+    for (const d of m.version_group_details) {
+      const method = methods[d.move_learn_method.name];
+      if (!method) continue;
+      const vg = d.version_group.name;
+      const key = `${vg}|${m.move.name}|${method}|${d.level_learned_at}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      (out[vg] ??= []).push({ name: m.move.name, method, level: d.level_learned_at });
+    }
+  }
+  return out;
+}
+
+/** Tipos do Pokémon na geração do jogo (usa os tipos antigos quando mudaram depois). */
+export function typesInGen(p: Pokemon, gen = 9): TypeName[] {
+  const past = p.pastTypes.find((pt) => gen <= pt.upToGen);
+  return past ? past.types : p.types;
+}
+
+/**
+ * Golpes do Pokémon num grupo de versões. Se o jogo não tiver dados (ou não for informado),
+ * cai para os golpes mais recentes e avisa com `fallback`.
+ */
+export function movesFor(p: Pokemon, versionGroup: string | null): { moves: LearnedMove[]; version: string | null; fallback: boolean } {
+  if (versionGroup && p.movesByVersion[versionGroup]?.length) {
+    return { moves: p.movesByVersion[versionGroup], version: versionGroup, fallback: false };
+  }
+  return { moves: p.moves, version: p.movesVersion, fallback: !!versionGroup };
+}
+
 export function getPokemon(id: number | string): Promise<Pokemon> {
   const hit = pokemonCache.get(id);
   if (hit) return hit;
@@ -206,6 +249,14 @@ export function getPokemon(id: number | string): Promise<Pokemon> {
       cry: p.cries?.latest ?? p.cries?.legacy ?? null,
       moves,
       movesVersion: version,
+      movesByVersion: groupMoves(p.moves),
+      pastTypes: (p.past_types ?? [])
+        .map((pt) => ({
+          upToGen: ROMAN.indexOf(pt.generation.name.replace("generation-", "")) + 1,
+          types: pt.types.map((x) => x.type.name).filter(isTypeName),
+        }))
+        .filter((pt) => pt.upToGen > 0 && pt.types.length > 0)
+        .sort((a, b) => a.upToGen - b.upToGen),
     };
   });
   promise.catch(() => pokemonCache.delete(id));

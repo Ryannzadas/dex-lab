@@ -1,22 +1,26 @@
-import { animated, useTrail } from "@react-spring/web";
 import { useCallback, useEffect, useState } from "react";
 import { Blobs } from "@/components/blobs";
 import { CompareTab } from "@/components/compare";
 import { SummaryView } from "@/components/summary";
 import { TeamTab } from "@/components/team";
 import { TeamManager } from "@/components/team-manager";
+import { Home } from "@/components/home";
 import { Pokedex } from "@/components/pokedex";
-import { ArrowIcon } from "@/components/ui";
-import { useIdList, usePrefersReducedMotion, useTheme, type ThemeMode } from "@/lib/state";
+
+import { useIdList, useTheme, type ThemeMode } from "@/lib/state";
 import { useTeams } from "@/lib/team";
+import { useGame } from "@/lib/use-game";
 import type { TypeName } from "@/lib/types";
 import { usePokemons } from "@/lib/use-pokemon";
 
-type Tab = "time" | "comparar" | "pokedex";
+type Tab = "inicio" | "time" | "comparar" | "pokedex";
 
 function readTab(): Tab {
-  const aba = new URLSearchParams(window.location.search).get("aba");
-  return aba === "comparar" || aba === "pokedex" ? aba : "time";
+  const params = new URLSearchParams(window.location.search);
+  const aba = params.get("aba");
+  if (aba === "comparar" || aba === "pokedex" || aba === "time") return aba;
+  // Link de time compartilhado (antigo, sem aba): abre direto no time. Senão, a tela inicial.
+  return params.has("time") && !aba ? "time" : "inicio";
 }
 
 function readSummary(): number | null {
@@ -38,12 +42,13 @@ export default function App() {
   const team = useTeams();
   const compare = useIdList("comparar", 4);
   const teamData = usePokemons(team.ids);
+  const gameCtx = useGame(team.active.game);
   const compareData = usePokemons(compare.ids);
   const theme = useTheme();
 
   useEffect(() => {
     const url = new URL(window.location.href);
-    if (tab !== "time") url.searchParams.set("aba", tab);
+    if (tab !== "inicio") url.searchParams.set("aba", tab);
     else url.searchParams.delete("aba");
     // Filtros da Pokédex só fazem sentido na aba dela.
     if (tab !== "pokedex") ["regiao", "tipo", "formas"].forEach((k) => url.searchParams.delete(k));
@@ -109,6 +114,7 @@ export default function App() {
             onClose={closeSummary}
             onOpen={openSummary}
             onAddToTeam={team.add}
+            check={gameCtx.check}
             onCompare={compare.add}
             teamIds={team.ids}
             compareIds={compare.ids}
@@ -116,10 +122,27 @@ export default function App() {
           />
         ) : (
           <>
-            {/* O título grande só aparece na aba Time; nas outras o conteúdo começa logo. */}
-            {tab === "time" ? <Hero /> : <div className="h-8" aria-hidden="true" />}
+            {tab !== "inicio" && <div className="h-8" aria-hidden="true" />}
             <div role="tabpanel" id={`painel-${tab}`} aria-labelledby={`aba-${tab}`} className="scroll-mt-24">
-              {tab === "time" ? (
+              {tab === "inicio" ? (
+                <Home
+                  teams={team}
+                  onContinue={(id) => {
+                    team.select(id);
+                    goToTab("time");
+                    window.scrollTo({ top: 0 });
+                  }}
+                  onNewTeam={(game) => {
+                    team.create(game ? game.label : undefined, [], game?.id ?? null);
+                    goToTab("time");
+                    window.scrollTo({ top: 0 });
+                  }}
+                  onGo={(t) => {
+                    goToTab(t);
+                    window.scrollTo({ top: 0 });
+                  }}
+                />
+              ) : tab === "time" ? (
                 <div className="grid grid-cols-1 gap-6">
                   <TeamManager api={team} loaded={teamData.list} />
                   <TeamTab
@@ -132,12 +155,14 @@ export default function App() {
                   onClear={team.clear}
                   onUpdate={team.update}
                   onOpen={openSummary}
+                  game={gameCtx}
                 />
                 </div>
               ) : tab === "pokedex" ? (
                 <Pokedex
                   onOpen={openSummary}
                   onAddToTeam={team.add}
+            check={gameCtx.check}
                   teamIds={team.ids}
                   teamFull={team.full}
                   onTypes={setDexTypes}
@@ -191,6 +216,15 @@ function Toolbar({
 
   const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
     {
+      id: "inicio",
+      label: "Início",
+      icon: (
+        <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+          <path d="M4 11 12 4l8 7v8a1 1 0 0 1-1 1h-4v-6H9v6H5a1 1 0 0 1-1-1v-8Z" strokeLinejoin="round" />
+        </svg>
+      ),
+    },
+    {
       id: "time",
       label: "Time",
       icon: (
@@ -230,14 +264,15 @@ function Toolbar({
       }`}
     >
       <div className="mx-auto flex max-w-6xl items-center justify-between gap-3">
-        <a
-          href="./"
+        <button
+          type="button"
+          onClick={() => setTab("inicio")}
           className="flex items-center gap-2 rounded-2xl border border-line bg-surface p-1 shadow-sm backdrop-blur-xl sm:pr-3.5"
-          aria-label="Dex Lab, início"
+          aria-label="Dex Lab, ir para o início"
         >
           <img src="/favicon.svg" alt="" width={36} height={36} className="size-9" />
           <span className="hidden font-display text-lg font-bold tracking-tight sm:inline">Dex Lab</span>
-        </a>
+        </button>
 
         <nav className="flex items-center gap-1 rounded-2xl border border-line bg-surface p-1 shadow-sm backdrop-blur-xl">
           <div role="tablist" aria-label="Ferramentas" className="flex gap-1">
@@ -291,52 +326,6 @@ function Toolbar({
         </nav>
       </div>
     </header>
-  );
-}
-
-const HEADLINE = ["Monte", "um", "time", "sem", "ponto", "fraco."];
-
-/** Título grande com as palavras entrando em cascata, com mola (estilo gsap.com). */
-function Hero() {
-  const reduce = usePrefersReducedMotion();
-  const trail = useTrail(HEADLINE.length, {
-    from: { opacity: 0, transform: "translateY(60%) rotate(4deg)" },
-    to: { opacity: 1, transform: "translateY(0%) rotate(0deg)" },
-    config: { tension: 260, friction: 20 },
-    immediate: reduce,
-  });
-
-  const start = (e: React.MouseEvent) => {
-    e.preventDefault();
-    document.querySelector('[role="tabpanel"]')?.scrollIntoView({ behavior: reduce ? "auto" : "smooth" });
-  };
-
-  return (
-    <section className="pt-14 pb-10 sm:pt-20 sm:pb-14">
-      <h1
-        aria-label={HEADLINE.join(" ")}
-        className="font-display text-[3.2rem] leading-[0.92] font-extrabold tracking-[-0.045em] sm:text-7xl lg:text-[6.5rem]"
-      >
-        {trail.map((style, i) => (
-          <span key={i} aria-hidden="true" className="inline-block overflow-hidden pr-[0.22em] pb-[0.08em] align-top">
-            <animated.span style={style} className={`inline-block ${i === 2 ? "italic" : ""}`}>
-              {HEADLINE[i]}
-            </animated.span>
-          </span>
-        ))}
-      </h1>
-      <div className="mt-8 flex flex-wrap items-center gap-x-8 gap-y-5">
-        <p className="braces max-w-md text-lg leading-snug">
-          Escolha até seis Pokémon e veja fraquezas, cobertura de tipos e o que falta no time. Compare status lado a lado ou explore a Pokédex inteira.
-        </p>
-        <a href="#painel" className="pill" onClick={start}>
-          Começar
-          <span className="pill-icon">
-            <ArrowIcon direction="down" />
-          </span>
-        </a>
-      </div>
-    </section>
   );
 }
 

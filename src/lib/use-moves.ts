@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { getMove, type MoveInfo } from "./moves";
-import { getPokemon, speciesIdOf, type Pokemon } from "./pokeapi";
+import { getPokemon, movesFor, speciesIdOf, type Pokemon } from "./pokeapi";
 
 /** Detalhes de vários golpes de uma vez (tipo, categoria, poder). */
 export function useMoveInfos(names: string[]) {
@@ -29,7 +29,7 @@ export function useMoveInfos(names: string[]) {
  * Golpes que o Pokémon pode aprender (nomes únicos, em ordem alfabética).
  * Mega, Gigantamax e Primal usam a lista da forma normal, que é a completa.
  */
-export function useLearnset(pokemon: Pokemon | null) {
+export function useLearnset(pokemon: Pokemon | null, versionGroup: string | null = null) {
   const usesBase = !!pokemon && /-(mega(-[xyz])?|gmax|primal)$/.test(pokemon.name);
   const [base, setBase] = useState<Pokemon | null>(null);
 
@@ -46,7 +46,9 @@ export function useLearnset(pokemon: Pokemon | null) {
 
   return useMemo(() => {
     const source = usesBase ? base : pokemon;
-    if (!source) return [];
-    return [...new Set(source.moves.map((m) => m.name))].sort();
-  }, [usesBase, base, pokemon]);
+    if (!source) return { moves: [] as string[], fallback: false };
+    // Golpes do jogo do time; se o jogo não tiver dados desse Pokémon, usa os mais recentes.
+    const { moves, fallback } = movesFor(source, versionGroup);
+    return { moves: [...new Set(moves.map((m) => m.name))].sort(), fallback };
+  }, [usesBase, base, pokemon, versionGroup]);
 }

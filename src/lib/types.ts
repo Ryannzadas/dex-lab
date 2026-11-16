@@ -102,13 +102,30 @@ const CHART: Partial<Record<TypeName, Partial<Record<TypeName, number>>>> = {
   fairy: { fire: 0.5, fighting: 2, poison: 0.5, dragon: 2, dark: 2, steel: 0.5 },
 };
 
-export function effectiveness(attack: TypeName, defense: TypeName): number {
+/**
+ * Efetividade de um tipo de ataque contra um tipo de defesa.
+ * `gen` aplica as regras antigas: até a 5ª geração o Aço resistia a Fantasma e Sombrio;
+ * na 1ª, Fantasma não afetava Psíquico, Inseto e Venenoso eram super efetivos entre si
+ * e Gelo era neutro contra Fogo.
+ */
+export function effectiveness(attack: TypeName, defense: TypeName, gen = 9): number {
+  if (gen <= 5 && defense === "steel" && (attack === "ghost" || attack === "dark")) return 0.5;
+  if (gen === 1) {
+    if (attack === "ghost" && defense === "psychic") return 0;
+    if ((attack === "bug" && defense === "poison") || (attack === "poison" && defense === "bug")) return 2;
+    if (attack === "ice" && defense === "fire") return 1;
+  }
   return CHART[attack]?.[defense] ?? 1;
 }
 
 /** Multiplicador de um ataque contra um Pokémon de um ou dois tipos. */
-export function multiplier(attack: TypeName, defenders: TypeName[]): number {
-  return defenders.reduce((m, d) => m * effectiveness(attack, d), 1);
+export function multiplier(attack: TypeName, defenders: TypeName[], gen = 9): number {
+  return defenders.reduce((m, d) => m * effectiveness(attack, d, gen), 1);
+}
+
+/** Tipos que existiam na geração: Sombrio e Aço chegaram na 2ª, Fada na 6ª. */
+export function typesOfGen(gen = 9): TypeName[] {
+  return TYPES.filter((t) => !((t === "dark" || t === "steel") && gen < 2) && !(t === "fairy" && gen < 6));
 }
 
 export function isTypeName(value: string): value is TypeName {

@@ -1,6 +1,7 @@
 import { useEffect, useId, useState } from "react";
 import { calcDamage, DEFENDER_PRESETS, type DefenderPreset } from "@/lib/damage";
-import { artworkUrl, displayName, getPokemon, pokemonName, type Pokemon } from "@/lib/pokeapi";
+import { artworkUrl, displayName, getPokemon, pokemonName, typesInGen, type Pokemon } from "@/lib/pokeapi";
+import type { GameContext } from "@/lib/use-game";
 import type { Member } from "@/lib/team";
 import { isTypeName, TYPE_INFO } from "@/lib/types";
 import { useMoveInfos } from "@/lib/use-moves";
@@ -14,7 +15,7 @@ const label = "mb-1 block text-xs font-semibold text-muted";
 const pct = (n: number) => `${n.toLocaleString("pt-BR", { maximumFractionDigits: 1, minimumFractionDigits: 1 })}%`;
 
 /** Calculadora de dano: um golpe do seu time contra qualquer Pokémon. */
-export function DamageCalc({ team, members }: { team: Pokemon[]; members: Member[] }) {
+export function DamageCalc({ team, members, game }: { team: Pokemon[]; members: Member[]; game: GameContext }) {
   const uid = useId();
   const [attackerId, setAttackerId] = useState<number | null>(null);
   const attacker = team.find((p) => p.id === attackerId) ?? team[0];
@@ -43,17 +44,20 @@ export function DamageCalc({ team, members }: { team: Pokemon[]; members: Member
 
   if (!attacker || !member) return null;
 
-  const teraType = member.tera && isTypeName(member.tera) ? member.tera : null;
+  // Tera só existe em jogos com Tera (ou no time sem jogo).
+  const teraType = (!game.game || game.game.tera) && member.tera && isTypeName(member.tera) ? member.tera : null;
   const result =
     move && defender
       ? calcDamage({
-          attacker,
+          // Tipos da época do jogo (ex.: Fada não existia antes da 6ª geração).
+          attacker: { ...attacker, types: typesInGen(attacker, game.gen) },
           attackerSpread: { level: member.level, nature: member.nature, evs: member.evs, ivs: member.ivs, item: member.item },
           attackerTera: tera ? teraType : null,
           move,
-          defender,
+          defender: { ...defender, types: typesInGen(defender, game.gen) },
           defenderPreset: preset,
           defenderLevel: member.level,
+          gen: game.gen,
         })
       : null;
 

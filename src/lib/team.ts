@@ -29,7 +29,8 @@ const TEAMS_KEY = "dexlab:times:v3";
 const V2_KEY = "dexlab:time:v2";
 const OLD_KEY = "dexlab:time";
 
-export type SavedTeam = { id: string; name: string; members: Member[]; updatedAt: number };
+/** `game`: id de um jogo de lib/games.ts, ou null para time livre (sem jogo). */
+export type SavedTeam = { id: string; name: string; members: Member[]; updatedAt: number; game: string | null };
 
 export function newMember(id: number): Member {
   return { id, nickname: "", level: 50, ability: null, item: "", nature: "hardy", tera: null, shiny: false, moves: [], evs: {}, ivs: {} };
@@ -157,6 +158,7 @@ function readInitial(): TeamsState {
           name: typeof t.name === "string" && t.name.trim() ? t.name.slice(0, 40) : "Time",
           members: cleanMembers(t.members),
           updatedAt: Number(t.updatedAt) || Date.now(),
+          game: typeof t.game === "string" ? t.game : null,
         }));
       activeId = typeof saved.activeId === "string" ? saved.activeId : "";
     }
@@ -165,16 +167,17 @@ function readInitial(): TeamsState {
   }
 
   if (teams.length === 0) {
-    teams = [{ id: makeId(), name: "Time 1", members: readLegacy(), updatedAt: Date.now() }];
+    teams = [{ id: makeId(), name: "Time 1", members: readLegacy(), updatedAt: Date.now(), game: null }];
   }
 
   // Link compartilhado: abre o time se já existir; senão, adiciona como time novo.
   const shared = readUrlTeam();
+  const sharedGame = new URLSearchParams(window.location.search).get("jogo");
   if (shared && shared.length) {
-    const same = teams.find((t) => signature(t.members) === signature(shared));
+    const same = teams.find((t) => signature(t.members) === signature(shared) && (t.game ?? null) === (sharedGame ?? null));
     if (same) activeId = same.id;
     else if (teams.length < MAX_TEAMS) {
-      const team = { id: makeId(), name: nextName(teams, "Compartilhado"), members: shared, updatedAt: Date.now() };
+      const team = { id: makeId(), name: nextName(teams, "Compartilhado"), members: shared, updatedAt: Date.now(), game: sharedGame };
       teams = [...teams, team];
       activeId = team.id;
     }
@@ -207,6 +210,8 @@ export function useTeams() {
       url.searchParams.delete("time");
       url.searchParams.delete("sets");
     }
+    if (team.game) url.searchParams.set("jogo", team.game);
+    else url.searchParams.delete("jogo");
     window.history.replaceState(window.history.state, "", url);
   }, [state]);
 
@@ -232,10 +237,10 @@ export function useTeams() {
   const select = useCallback((id: string) => setState((s) => (s.teams.some((t) => t.id === id) ? { ...s, activeId: id } : s)), []);
 
   /** Cria um time (vazio ou com membros, como no import) e já abre ele. */
-  const create = useCallback((name?: string, initial: Member[] = []) => {
+  const create = useCallback((name?: string, initial: Member[] = [], game: string | null = null) => {
     setState((s) => {
       if (s.teams.length >= MAX_TEAMS) return s;
-      const team = { id: makeId(), name: name?.trim() || nextName(s.teams), members: cleanMembers(initial), updatedAt: Date.now() };
+      const team = { id: makeId(), name: name?.trim() || nextName(s.teams), members: cleanMembers(initial), updatedAt: Date.now(), game };
       return { teams: [...s.teams, team], activeId: team.id };
     });
   }, []);
@@ -261,7 +266,7 @@ export function useTeams() {
     setState((s) => {
       const rest = s.teams.filter((t) => t.id !== id);
       if (rest.length === 0) {
-        const fresh = { id: makeId(), name: "Time 1", members: [], updatedAt: Date.now() };
+        const fresh = { id: makeId(), name: "Time 1", members: [], updatedAt: Date.now(), game: null };
         return { teams: [fresh], activeId: fresh.id };
       }
       const idx = s.teams.findIndex((t) => t.id === id);
@@ -270,8 +275,14 @@ export function useTeams() {
     });
   }, []);
 
+  /** Troca o jogo do time (os membros ficam; os que não existem no jogo aparecem marcados). */
+  const setGame = useCallback((id: string, game: string | null) => {
+    setState((s) => ({ ...s, teams: s.teams.map((t) => (t.id === id ? { ...t, game, updatedAt: Date.now() } : t)) }));
+  }, []);
+
   return {
     teams: state.teams,
+    setGame,
     active,
     members,
     ids: members.map((m) => m.id),

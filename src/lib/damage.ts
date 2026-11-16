@@ -53,8 +53,10 @@ export function calcDamage(opts: {
   defender: Pokemon;
   defenderPreset: DefenderPreset;
   defenderLevel: number;
+  /** Geração do jogo: tabela de tipos da época. */
+  gen?: number;
 }): DamageResult | null {
-  const { attacker, attackerSpread, attackerTera, move, defender, defenderPreset, defenderLevel } = opts;
+  const { attacker, attackerSpread, attackerTera, move, defender, defenderPreset, defenderLevel, gen = 9 } = opts;
   if (move.category === "status" || !move.power || !move.type) return null;
 
   const physical = move.category === "physical";
@@ -82,7 +84,7 @@ export function calcDamage(opts: {
   const original = attacker.types.includes(move.type);
   const teraMatch = attackerTera === move.type;
   const stab = teraMatch && original ? 2 : teraMatch || original ? 1.5 : 1;
-  const eff = multiplier(move.type, defender.types);
+  const eff = multiplier(move.type, defender.types, gen);
 
   const rolls: number[] = [];
   for (let r = 85; r <= 100; r++) {

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { buildEntries, getTypeIndex, REGIONS, type DexEntry, type RegionId } from "@/lib/dex";
 import { artworkUrl, getPokemonList, pokemonName } from "@/lib/pokeapi";
+import type { Availability } from "@/lib/games";
 import { TYPE_INFO, TYPES, type TypeName } from "@/lib/types";
 import { Card, SectionHeading, TypeBadge } from "./ui";
 
@@ -11,6 +12,8 @@ type Props = {
   onAddToTeam: (id: number) => void;
   teamIds: number[];
   teamFull: boolean;
+  /** Jogo do time aberto: quem não existe nele não pode ser adicionado. */
+  check?: (speciesId: number, name: string) => Availability;
   onTypes: (types: TypeName[]) => void;
 };
 
@@ -25,7 +28,7 @@ function readFilters() {
 }
 
 /** Pokédex com busca e filtros por região e tipo. Clicar num Pokémon abre o resumo. */
-export function Pokedex({ onOpen, onAddToTeam, teamIds, teamFull, onTypes }: Props) {
+export function Pokedex({ onOpen, onAddToTeam, teamIds, teamFull, onTypes, check }: Props) {
   const [initial] = useState(readFilters);
   const [entries, setEntries] = useState<DexEntry[] | null>(null);
   const [typeIndex, setTypeIndex] = useState<Record<number, TypeName[]> | null>(null);
@@ -210,6 +213,7 @@ export function Pokedex({ onOpen, onAddToTeam, teamIds, teamFull, onTypes }: Pro
                 entry={e}
                 types={typeIndex?.[e.id] ?? null}
                 inTeam={teamIds.includes(e.id)}
+                blocked={check?.(e.dexNumber, e.name) === "blocked"}
                 teamFull={teamFull}
                 onOpen={() => onOpen(e.dexNumber, e.isForm ? e.id : undefined)}
                 onAdd={() => onAddToTeam(e.id)}
@@ -228,6 +232,7 @@ function DexCard({
   types,
   inTeam,
   teamFull,
+  blocked,
   onOpen,
   onAdd,
 }: {
@@ -235,6 +240,7 @@ function DexCard({
   types: TypeName[] | null;
   inTeam: boolean;
   teamFull: boolean;
+  blocked: boolean;
   onOpen: () => void;
   onAdd: () => void;
 }) {
@@ -267,9 +273,9 @@ function DexCard({
       <button
         type="button"
         onClick={onAdd}
-        disabled={inTeam || teamFull}
-        aria-label={inTeam ? `${name} já está no time` : `Adicionar ${name} ao time`}
-        title={inTeam ? "Já está no time" : teamFull ? "Time cheio" : "Adicionar ao time"}
+        disabled={inTeam || teamFull || blocked}
+        aria-label={inTeam ? `${name} já está no time` : blocked ? `${name} não está no jogo do time` : `Adicionar ${name} ao time`}
+        title={inTeam ? "Já está no time" : blocked ? "Não está no jogo do time" : teamFull ? "Time cheio" : "Adicionar ao time"}
         className={`absolute top-2.5 right-2.5 grid size-8 place-items-center rounded-full border text-base font-semibold transition ${
           inTeam ? "border-ink bg-ink text-bg" : "border-line bg-surface-solid/90 text-muted hover:border-ink hover:text-ink disabled:opacity-40"
         }`}

@@ -13,6 +13,7 @@ import {
   type Species,
 } from "@/lib/pokeapi";
 import { multiplier, TYPE_INFO, TYPES, type TypeName } from "@/lib/types";
+import type { Availability } from "@/lib/games";
 import { Info, StatBar } from "./compare";
 import { CryButton, ShinyArtwork } from "./media";
 import { CATEGORY_PT } from "@/lib/moves";
@@ -26,6 +27,8 @@ type Props = {
   onClose: () => void;
   onOpen: (speciesId: number, formId?: number) => void;
   onAddToTeam: (id: number) => void;
+  /** Jogo do time aberto: bloqueia adicionar quem não existe nele. */
+  check?: (speciesId: number, name: string) => Availability;
   onCompare: (id: number) => void;
   teamIds: number[];
   compareIds: number[];
@@ -33,7 +36,7 @@ type Props = {
 };
 
 /** Resumo completo de um Pokémon, com abas para cada forma (Normal, Mega X, Alola…). */
-export function SummaryView({ speciesId, initialFormId, onClose, onOpen, onAddToTeam, onCompare, teamIds, compareIds, onTypes }: Props) {
+export function SummaryView({ speciesId, initialFormId, onClose, onOpen, onAddToTeam, onCompare, teamIds, compareIds, onTypes, check }: Props) {
   const [species, setSpecies] = useState<Species | null>(null);
   const [formId, setFormId] = useState<number | null>(null);
   const [pokemon, setPokemon] = useState<Pokemon | null>(null);
@@ -143,6 +146,7 @@ export function SummaryView({ speciesId, initialFormId, onClose, onOpen, onAddTo
               pokemon={pokemon}
               inTeam={teamIds.includes(pokemon.id)}
               teamFull={teamIds.length >= 6}
+              blocked={check?.(speciesId, pokemon.name) === "blocked"}
               inCompare={compareIds.includes(pokemon.id)}
               compareFull={compareIds.length >= 4}
               onAddToTeam={() => onAddToTeam(pokemon.id)}
@@ -170,6 +174,7 @@ function Header({
   compareFull,
   onAddToTeam,
   onCompare,
+  blocked,
 }: {
   species: Species;
   pokemon: Pokemon;
@@ -178,6 +183,7 @@ function Header({
   inCompare: boolean;
   compareFull: boolean;
   onAddToTeam: () => void;
+  blocked: boolean;
   onCompare: () => void;
 }) {
   const color = TYPE_INFO[pokemon.types[0]].color;
@@ -216,8 +222,8 @@ function Header({
       </div>
 
       <div className="mt-5 flex flex-wrap gap-2">
-        <button type="button" onClick={onAddToTeam} disabled={inTeam || teamFull} className="pill">
-          {inTeam ? "Já está no time" : teamFull ? "Time cheio" : "Adicionar ao time"}
+        <button type="button" onClick={onAddToTeam} disabled={inTeam || teamFull || blocked} className="pill">
+          {inTeam ? "Já está no time" : blocked ? "Não está no jogo do time" : teamFull ? "Time cheio" : "Adicionar ao time"}
           <span className="pill-icon">
             <ArrowIcon direction="up-right" />
           </span>

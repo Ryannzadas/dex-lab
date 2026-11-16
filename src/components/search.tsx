@@ -1,4 +1,6 @@
 import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { buildEntries } from "@/lib/dex";
+import type { Availability } from "@/lib/games";
 import { artworkUrl, getPokemonList, pokemonName, spriteUrl, type PokemonRef } from "@/lib/pokeapi";
 
 type Props = {
@@ -7,12 +9,14 @@ type Props = {
   exclude?: number[];
   placeholder?: string;
   label: string;
+  /** Regras do jogo do time: "blocked" não deixa escolher; "warn" só avisa. */
+  check?: (speciesId: number, name: string) => Availability;
 };
 
 const MAX_RESULTS = 10;
 
 /** Busca por nome ou número, com navegação por teclado (padrão combobox). */
-export function PokemonSearch({ onPick, disabled, exclude = [], placeholder, label }: Props) {
+export function PokemonSearch({ onPick, disabled, exclude = [], placeholder, label, check }: Props) {
   const [list, setList] = useState<PokemonRef[] | null>(null);
   const [error, setError] = useState(false);
   const [query, setQuery] = useState("");
@@ -27,6 +31,10 @@ export function PokemonSearch({ onPick, disabled, exclude = [], placeholder, lab
       .then(setList)
       .catch(() => setError(true));
   }, []);
+
+  // Número da espécie de cada forma (ex.: Vulpix de Alola → 37), para checar o jogo.
+  const speciesOf = useMemo(() => new Map((list ? buildEntries(list) : []).map((e) => [e.id, e.dexNumber])), [list]);
+  const statusOf = (p: PokemonRef): Availability => (check ? check(speciesOf.get(p.id) ?? p.id, p.name) : "ok");
 
   const results = useMemo(() => {
     if (!list || !query.trim()) return [];
@@ -53,6 +61,7 @@ export function PokemonSearch({ onPick, disabled, exclude = [], placeholder, lab
   }, [list, query, exclude]);
 
   const pick = (p: PokemonRef) => {
+    if (statusOf(p) === "blocked") return;
     onPick(p.id);
     setQuery("");
     setOpen(false);
@@ -128,10 +137,13 @@ export function PokemonSearch({ onPick, disabled, exclude = [], placeholder, lab
               id={`${listId}-${i}`}
               role="option"
               aria-selected={i === active}
+              aria-disabled={statusOf(p) === "blocked"}
               onMouseDown={(e) => e.preventDefault()}
               onClick={() => pick(p)}
               onMouseEnter={() => setActive(i)}
-              className={`flex cursor-pointer items-center gap-3 rounded-xl px-2 py-1.5 ${i === active ? "bg-line/70" : ""}`}
+              className={`flex items-center gap-3 rounded-xl px-2 py-1.5 ${i === active ? "bg-line/70" : ""} ${
+                statusOf(p) === "blocked" ? "cursor-not-allowed opacity-45" : "cursor-pointer"
+              }`}
             >
               <img
                 src={spriteUrl(p.id)}
@@ -151,6 +163,10 @@ export function PokemonSearch({ onPick, disabled, exclude = [], placeholder, lab
                 className="size-10 object-contain [image-rendering:pixelated]"
               />
               <span className="font-medium">{pokemonName(p.name)}</span>
+              {statusOf(p) === "blocked" && <span className="text-xs text-muted">não está neste jogo</span>}
+              {statusOf(p) === "warn" && (
+                <span className="rounded-full bg-amber-400/20 px-2 py-0.5 text-[11px] text-amber-800 dark:text-amber-200">pode não existir no hack</span>
+              )}
               <span className="ml-auto font-mono text-xs text-muted">
                 {/* Formas têm id interno (acima de 10000) que não é número da Pokédex. */}
                 {p.id > 10000 ? "forma" : `#${String(p.id).padStart(4, "0")}`}

@@ -4,6 +4,23 @@ Montador de time e comparador de Pokémon, feito com dados da [PokéAPI](https:/
 
 ## O que faz
 
+### Tela inicial e jogos
+
+A tela inicial é a porta de entrada:
+
+- **Continuar:** volta ao último time mexido, que aparece com os Pokémon dele em arco.
+- **Novo time:** comece um time para um **jogo específico** escolhendo o card dele, com filtro por geração. Também dá pra montar um time livre.
+
+Cada time salvo pode ter um jogo, que dá pra trocar no card "Meus times":
+
+- **Jogos oficiais (do Red/Blue ao Legends: Z-A):** usam os dados da PokéAPI.
+  - **Quem entra:** só Pokémon da Pokédex daquele jogo (com DLCs) e as formas que existem nele (Mega, regionais, Gigantamax…). O resto aparece bloqueado na busca, na Pokédex e no resumo.
+  - **Golpes:** os que cada Pokémon aprende naquele jogo.
+  - **Regras da época:** tipos antigos de cada Pokémon (ex.: Gardevoir só Psíquica antes da 6ª geração), tabela de tipos da geração (sem Fada antes da 6ª, sem Sombrio e Aço na 1ª, Aço resistindo a Fantasma e Sombrio até a 5ª), e só os campos que existiam (habilidade e natureza a partir da 3ª, item a partir da 2ª, Tera só em Scarlet/Violet).
+- **ROM hacks (Radical Red, Unbound e Quetzal):** em "modo hack".
+  - **Por que é diferente:** a PokéAPI não tem os dados desses jogos, então o app usa só as gerações que cada hack inclui e as regras modernas.
+  - **Só avisa:** Pokémon fora disso aparecem com o aviso "pode não existir", sem bloqueio. Os golpes são os do Scarlet/Violet, como referência.
+
 ### Aba Time
 
 Você escolhe até seis Pokémon e o app mostra:
@@ -93,6 +110,7 @@ O Dex Lab é um PWA: no celular, use "Adicionar à tela inicial"; no computador,
 ## Referências de design
 
 - [react-spring.dev](https://www.react-spring.dev/): as manchas de cor desfocadas no fundo, que aqui mudam de cor conforme os tipos do time, e a barra de ícones do menu. As animações de mola também vêm da biblioteca React Spring.
+- [awwwards.com](https://www.awwwards.com/) e [horizonx.so](https://horizonx.so/) (tela inicial): grade de cards grandes com legenda embaixo e contadores em caixinha; os Pokémon do último time num arco em perspectiva.
 - [gsap.com](https://gsap.com/): o título grande com as palavras entrando em cascata, os textos entre chaves `{ }` e os botões em pílula com seta num círculo.
 
 ## Rodando

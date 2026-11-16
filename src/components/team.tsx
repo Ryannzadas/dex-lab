@@ -1,7 +1,9 @@
 import { animated, useTransition } from "@react-spring/web";
 import { useState } from "react";
 import { coverageFromTypes, defenseTable, offensiveCoverage, suggestTypes, teraDefenseTypes } from "@/lib/analysis";
-import { artworkUrl, pokemonName, speciesIdOf, type Pokemon } from "@/lib/pokeapi";
+import { artworkUrl, pokemonName, speciesIdOf, typesInGen, type Pokemon } from "@/lib/pokeapi";
+import type { Availability } from "@/lib/games";
+import type { GameContext } from "@/lib/use-game";
 import { usePrefersReducedMotion } from "@/lib/state";
 import { MAX_TEAM, type Member } from "@/lib/team";
 import { useMoveInfos } from "@/lib/use-moves";
@@ -23,9 +25,11 @@ type Props = {
   onClear: () => void;
   onUpdate: (id: number, patch: Partial<Member>) => void;
   onOpen: (speciesId: number, formId?: number) => void;
+  /** Jogo do time: bloqueia/avisa Pokémon fora do jogo e aplica as regras da época. */
+  game: GameContext;
 };
 
-export function TeamTab({ members, team, pending, onAdd, onRemove, onClear, onUpdate, onOpen }: Props) {
+export function TeamTab({ members, team, pending, onAdd, onRemove, onClear, onUpdate, onOpen, game }: Props) {
   const ids = members.map((m) => m.id);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   // Sem seleção (ou o selecionado saiu do time): edita o primeiro.
@@ -64,6 +68,7 @@ export function TeamTab({ members, team, pending, onAdd, onRemove, onClear, onUp
         <PokemonSearch
           label="Adicionar Pokémon ao time"
           onPick={add}
+          check={game.check}
           disabled={ids.length >= MAX}
           exclude={ids}
           placeholder={ids.length >= MAX ? "Time completo! Remova alguém para trocar." : undefined}
@@ -76,6 +81,7 @@ export function TeamTab({ members, team, pending, onAdd, onRemove, onClear, onUp
           selectedId={currentId}
           onSelect={setSelectedId}
           onRemove={onRemove}
+          game={game}
         />
       </Card>
 
@@ -87,10 +93,11 @@ export function TeamTab({ members, team, pending, onAdd, onRemove, onClear, onUp
           onChange={(patch) => onUpdate(current.id, patch)}
           onRemove={() => onRemove(current.id)}
           onOpenSummary={() => onOpen(speciesIdOf(currentPokemon), currentPokemon.id)}
+          game={game.game}
         />
       )}
 
-      {team.length > 0 ? <Analysis team={team} members={members} /> : <EmptyHint />}
+      {team.length > 0 ? <Analysis team={team} members={members} game={game} /> : <EmptyHint />}
     </div>
   );
 }
@@ -102,6 +109,7 @@ function Slots({
   selectedId,
   onSelect,
   onRemove,
+  game,
 }: {
   team: Pokemon[];
   members: Member[];
@@ -109,6 +117,7 @@ function Slots({
   selectedId: number | null;
   onSelect: (id: number) => void;
   onRemove: (id: number) => void;
+  game: GameContext;
 }) {
   const reduce = usePrefersReducedMotion();
   const transitions = useTransition(team, {
@@ -131,6 +140,8 @@ function Slots({
             selected={p.id === selectedId}
             onSelect={() => onSelect(p.id)}
             onRemove={() => onRemove(p.id)}
+            status={game.check(speciesIdOf(p), p.name)}
+            types={typesInGen(p, game.gen)}
           />
         </animated.li>
       ))}
@@ -156,14 +167,18 @@ function MemberCard({
   selected,
   onSelect,
   onRemove,
+  status,
+  types,
 }: {
   pokemon: Pokemon;
   member: Member | undefined;
   selected: boolean;
   onSelect: () => void;
   onRemove: () => void;
+  status: Availability;
+  types: TypeName[];
 }) {
-  const main = TYPE_INFO[pokemon.types[0]].color;
+  const main = TYPE_INFO[types[0]].color;
   const name = member?.nickname || pokemonName(pokemon.name);
   return (
     <div
@@ -187,15 +202,24 @@ function MemberCard({
       )}
       <p className="relative w-full truncate font-display text-xs leading-tight font-bold sm:text-sm">{name}</p>
       <p className="relative font-mono text-[10px] text-muted">Nv {member?.level ?? 50}</p>
+      {status !== "ok" && (
+        <p
+          className={`relative mt-0.5 rounded-full px-1.5 text-[10px] font-semibold ${
+            status === "blocked" ? "bg-red-500/15 text-red-700 dark:text-red-300" : "bg-amber-400/20 text-amber-800 dark:text-amber-200"
+          }`}
+        >
+          {status === "blocked" ? "fora do jogo" : "pode não existir"}
+        </p>
+      )}
       {/* Celular: bolinhas de cor; telas maiores: etiquetas com o nome do tipo. */}
       <div className="relative mt-1 flex justify-center gap-1 sm:hidden">
-        {pokemon.types.map((t) => (
+        {types.map((t) => (
           <span key={t} title={TYPE_INFO[t].pt} className="size-2.5 rounded-full" style={{ background: TYPE_INFO[t].color }} />
         ))}
-        <span className="sr-only">{pokemon.types.map((t) => TYPE_INFO[t].pt).join(" e ")}</span>
+        <span className="sr-only">{types.map((t) => TYPE_INFO[t].pt).join(" e ")}</span>
       </div>
       <div className="relative mt-1 hidden flex-wrap justify-center gap-1 sm:flex">
-        {pokemon.types.map((t) => (
+        {types.map((t) => (
           <TypeBadge key={t} type={t} size="sm" />
         ))}
       </div>
@@ -266,15 +290,22 @@ function multClass(v: number) {
   return "text-muted/50";
 }
 
-function Analysis({ team, members }: { team: Pokemon[]; members: Member[] }) {
-  // "Com Tera": cada membro com Tipo Tera passa a defender só com o tipo Tera.
+function Analysis({ team, members, game }: { team: Pokemon[]; members: Member[]; game: GameContext }) {
+  const { gen } = game;
+  // Tipos da época do jogo (ex.: Clefairy era Normal antes da 6ª geração).
+  const typed = team.map((p) => ({ types: typesInGen(p, gen) }));
+  // "Com Tera": cada membro com Tipo Tera passa a defender só com o tipo Tera (só em jogos com Tera).
   const [withTera, setWithTera] = useState(false);
-  const teraOf = (p: Pokemon) => members.find((m) => m.id === p.id)?.tera ?? null;
+  const teraAllowed = !game.game || game.game.tera;
+  const teraOf = (p: Pokemon) => (teraAllowed ? (members.find((m) => m.id === p.id)?.tera ?? null) : null);
   const hasTera = team.some((p) => { const t = teraOf(p); return !!t && t !== "stellar"; });
   const useTera = withTera && hasTera;
-  const rows = defenseTable(team.map((p) => ({ types: useTera ? teraDefenseTypes(p.types, teraOf(p)) : p.types })));
+  const rows = defenseTable(
+    team.map((p, i) => ({ types: useTera ? teraDefenseTypes(typed[i].types, teraOf(p)) : typed[i].types })),
+    gen,
+  );
   const problems = rows.filter((r) => r.problem);
-  const suggestions = suggestTypes(team);
+  const suggestions = suggestTypes(typed, 3, gen);
 
   // Cobertura: pelos golpes escolhidos quando houver golpes de dano; senão, pelos tipos do time.
   const infos = useMoveInfos(members.flatMap((m) => m.moves).filter(Boolean));
@@ -284,7 +315,7 @@ function Analysis({ team, members }: { team: Pokemon[]; members: Member[] }) {
     .filter((i) => i && i.category !== "status" && i.type)
     .map((i) => i!.type as TypeName);
   const byMoves = damagingTypes.length > 0;
-  const { covered, uncovered } = byMoves ? coverageFromTypes(damagingTypes) : offensiveCoverage(team);
+  const { covered, uncovered, total } = byMoves ? coverageFromTypes(damagingTypes, gen) : offensiveCoverage(typed, gen);
   const withoutMoves = team.filter((p) => !members.find((m) => m.id === p.id)?.moves.some(Boolean));
 
   return (
@@ -320,10 +351,10 @@ function Analysis({ team, members }: { team: Pokemon[]; members: Member[] }) {
             </p>
           )}
           <p className="mb-2 text-sm font-medium">
-            {covered.length}/18 cobertos
+            {covered.length}/{total} cobertos
           </p>
           <div className="h-2 overflow-hidden rounded-full bg-line">
-            <div className="h-full rounded-full bg-ink transition-[width] duration-700" style={{ width: `${(covered.length / 18) * 100}%` }} />
+            <div className="h-full rounded-full bg-ink transition-[width] duration-700" style={{ width: `${(covered.length / total) * 100}%` }} />
           </div>
           {uncovered.length > 0 && (
             <>
@@ -364,13 +395,14 @@ function Analysis({ team, members }: { team: Pokemon[]; members: Member[] }) {
 
       <SpeedTiers team={team} members={members} />
 
-      <DamageCalc team={team} members={members} />
+      <DamageCalc team={team} members={members} game={game} />
 
       <Card>
         <div className="flex flex-wrap items-end justify-between gap-3">
           <SectionHeading kicker="Defesa" title="Tabela de fraquezas">
             Quanto dano cada tipo de ataque causa em cada membro. Vermelho é fraqueza, verde é resistência e preto é imunidade.
           </SectionHeading>
+          {teraAllowed && (
           <div className="mb-5">
             <div role="group" aria-label="Tipos usados na defesa" className="flex gap-1 rounded-2xl border border-line p-1">
               {[
@@ -393,6 +425,7 @@ function Analysis({ team, members }: { team: Pokemon[]; members: Member[] }) {
             </div>
             {!hasTera && <p className="mt-1 text-right text-[11px] text-muted">Escolha um Tipo Tera no editor</p>}
           </div>
+          )}
         </div>
         <div className="scroll-x -mx-2 overflow-x-auto px-2">
           <table className="w-full min-w-[560px] border-separate border-spacing-1 text-sm">

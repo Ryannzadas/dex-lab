@@ -3,6 +3,7 @@ import { CATEGORY_PT, COMMON_ITEMS, TERA_TYPES } from "@/lib/moves";
 import { EV_MAX, EV_TOTAL, finalStats, IV_MAX, NATURES, SHORT_STAT } from "@/lib/natures";
 import { artworkUrl, displayName, pokemonName, type Pokemon, type StatKey } from "@/lib/pokeapi";
 import type { Member } from "@/lib/team";
+import type { Game } from "@/lib/games";
 import { TYPE_INFO } from "@/lib/types";
 import { useLearnset, useMoveInfos } from "@/lib/use-moves";
 import { ArrowIcon, Card, TypeBadge } from "./ui";
@@ -13,6 +14,8 @@ type Props = {
   onChange: (patch: Partial<Member>) => void;
   onRemove: () => void;
   onOpenSummary: () => void;
+  /** Jogo do time: define golpes e quais campos existem (Tera, habilidade, natureza…). */
+  game: Game | null;
 };
 
 const field =
@@ -20,9 +23,14 @@ const field =
 const label = "mb-1 block text-xs font-semibold text-muted";
 
 /** Editor completo de um membro do time (inspirado no montador da Firma League). */
-export function MemberEditor({ member, pokemon, onChange, onRemove, onOpenSummary }: Props) {
+export function MemberEditor({ member, pokemon, onChange, onRemove, onOpenSummary, game }: Props) {
   const uid = useId();
-  const learnset = useLearnset(pokemon);
+  const { moves: learnset, fallback: learnsetFallback } = useLearnset(pokemon, game?.versionGroup ?? null);
+  const gen = game?.gen ?? 9;
+  // Habilidades e naturezas surgiram na 3ª geração; itens segurados, na 2ª; Tera só no Scarlet/Violet.
+  const hasAbilities = gen >= 3;
+  const hasItems = gen >= 2;
+  const hasTera = !game || game.tera;
   const moveInfos = useMoveInfos(member.moves);
   const display = member.nickname || pokemonName(pokemon.name);
 
@@ -100,6 +108,7 @@ export function MemberEditor({ member, pokemon, onChange, onRemove, onOpenSummar
             onChange={(e) => onChange({ level: Math.min(100, Math.max(1, Number(e.target.value) || 1)) })}
           />
         </div>
+        {hasAbilities && (
         <div>
           <label htmlFor={`${uid}-ability`} className={label}>Habilidade</label>
           <select
@@ -120,6 +129,8 @@ export function MemberEditor({ member, pokemon, onChange, onRemove, onOpenSummar
             ))}
           </select>
         </div>
+        )}
+        {hasItems && (
         <div>
           <label htmlFor={`${uid}-item`} className={label}>Item segurado</label>
           <input
@@ -137,6 +148,8 @@ export function MemberEditor({ member, pokemon, onChange, onRemove, onOpenSummar
             ))}
           </datalist>
         </div>
+        )}
+        {hasAbilities && (
         <div>
           <label htmlFor={`${uid}-nature`} className={label}>Natureza</label>
           <select id={`${uid}-nature`} className={field} value={member.nature} onChange={(e) => onChange({ nature: e.target.value })}>
@@ -147,6 +160,8 @@ export function MemberEditor({ member, pokemon, onChange, onRemove, onOpenSummar
             ))}
           </select>
         </div>
+        )}
+        {hasTera && (
         <div>
           <label htmlFor={`${uid}-tera`} className={label}>Tipo Tera</label>
           <select id={`${uid}-tera`} className={field} value={member.tera ?? ""} onChange={(e) => onChange({ tera: e.target.value || null })}>
@@ -158,10 +173,23 @@ export function MemberEditor({ member, pokemon, onChange, onRemove, onOpenSummar
             ))}
           </select>
         </div>
+        )}
       </div>
 
       <fieldset className="mt-6 min-w-0">
-        <legend className={label}>Golpes (até 4, só os que ele aprende)</legend>
+        <legend className={label}>
+          Golpes (até 4, só os que ele aprende{game ? ` em ${game.label}` : ""})
+        </legend>
+        {game?.kind === "hack" && (
+          <p className="mb-2 text-xs text-amber-700 dark:text-amber-300">
+            Golpes do Scarlet/Violet como referência: o hack pode ter mudado o que cada Pokémon aprende.
+          </p>
+        )}
+        {game?.kind === "official" && learnsetFallback && (
+          <p className="mb-2 text-xs text-amber-700 dark:text-amber-300">
+            A PokéAPI não tem os golpes deste Pokémon em {game.label}; mostrando os do jogo mais recente.
+          </p>
+        )}
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           {moveSlots.map((move, i) => {
             const info = move ? moveInfos[move] : undefined;

@@ -5,6 +5,7 @@ import type { TeamsApi } from "@/lib/team";
 import { drawTeamCard } from "@/lib/team-image";
 import { useMoveInfos } from "@/lib/use-moves";
 import { Card } from "./ui";
+import { GAMES, gameById } from "@/lib/games";
 
 type Panel = null | "rename" | "import" | "export" | "delete" | "image";
 
@@ -66,6 +67,8 @@ export function TeamManager({ api, loaded }: { api: TeamsApi; loaded: Pokemon[] 
           + Novo time
         </button>
       </div>
+
+      <GameSelect api={api} />
 
       <div className="mt-3 flex flex-wrap gap-2">
         <button type="button" className={small} onClick={() => toggle("rename")} aria-expanded={panel === "rename"}>
@@ -328,6 +331,51 @@ function ImagePanel({ api, loaded }: { api: TeamsApi; loaded: Pokemon[] }) {
           <span className="text-xs text-muted">Este navegador não deixou copiar. Use "Baixar PNG".</span>
         )}
       </div>
+    </div>
+  );
+}
+
+/** Jogo do time aberto: define quem pode entrar, golpes e regras. */
+function GameSelect({ api }: { api: TeamsApi }) {
+  const id = useId();
+  const game = gameById(api.active.game);
+  const gens = [...new Set(GAMES.filter((g) => g.kind === "official").map((g) => g.gen))];
+  return (
+    <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1.5">
+      <label htmlFor={id} className="text-sm font-semibold">
+        Jogo do time
+      </label>
+      <select
+        id={id}
+        value={api.active.game ?? ""}
+        onChange={(e) => api.setGame(api.active.id, e.target.value || null)}
+        className="rounded-xl border border-line bg-surface-solid px-3 py-1.5 text-sm outline-none focus:border-ink"
+      >
+        <option value="">Livre (sem jogo)</option>
+        {gens.map((gen) => (
+          <optgroup key={gen} label={`${gen}ª geração`}>
+            {GAMES.filter((g) => g.kind === "official" && g.gen === gen).map((g) => (
+              <option key={g.id} value={g.id}>
+                {g.label}
+              </option>
+            ))}
+          </optgroup>
+        ))}
+        <optgroup label="ROM hacks">
+          {GAMES.filter((g) => g.kind === "hack").map((g) => (
+            <option key={g.id} value={g.id}>
+              {g.label}
+            </option>
+          ))}
+        </optgroup>
+      </select>
+      {game && (
+        <span className="text-xs text-muted">
+          {game.kind === "hack"
+            ? `Modo hack: ${game.note} Status, golpes e tipos podem ter mudado; o app só avisa.`
+            : `Só entram Pokémon da Pokédex de ${game.region}${game.pokedexes.length > 1 ? " (com DLCs)" : ""}. Regras da ${game.gen}ª geração.`}
+        </span>
+      )}
     </div>
   );
 }
