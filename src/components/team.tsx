@@ -8,6 +8,7 @@ import { useMoveInfos } from "@/lib/use-moves";
 import { TYPE_INFO, type TypeName } from "@/lib/types";
 import { MemberEditor } from "./member-editor";
 import { SpeedTiers } from "./speed";
+import { DamageCalc } from "./damage-calc";
 import { PokemonSearch } from "./search";
 import { ArrowIcon, Card, SectionHeading, TypeBadge } from "./ui";
 
@@ -362,6 +363,8 @@ function Analysis({ team, members }: { team: Pokemon[]; members: Member[] }) {
       </div>
 
       <SpeedTiers team={team} members={members} />
+
+      <DamageCalc team={team} members={members} />
 
       <Card>
         <div className="flex flex-wrap items-end justify-between gap-3">
