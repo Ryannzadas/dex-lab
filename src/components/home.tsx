@@ -7,6 +7,15 @@ import { ArrowIcon } from "./ui";
 
 type Filter = "todos" | "hacks" | number;
 
+/** Sorteia 6 Pokémon distintos da Pokédex nacional (1 a 1025) para quando ainda não há time salvo. */
+function pickRandomTeamIds(count = 6): number[] {
+  const picked = new Set<number>();
+  while (picked.size < count) {
+    picked.add(Math.floor(Math.random() * 1025) + 1);
+  }
+  return [...picked];
+}
+
 /**
  * Tela inicial: continuar o último time (leque de cards estilo Firma League / horizonx.so)
  * e escolher o jogo do próximo time numa grade de cards grandes (ideia do awwwards.com).
@@ -25,6 +34,7 @@ export function Home({
   onOpen: (speciesId: number, formId?: number) => void;
 }) {
   const [filter, setFilter] = useState<Filter>("todos");
+  const [randomIds, setRandomIds] = useState<number[]>(() => pickRandomTeamIds(6));
   const official = GAMES.filter((g) => g.kind === "official");
   const hacks = GAMES.filter((g) => g.kind === "hack");
   const gens = [...new Set(official.map((g) => g.gen))];
@@ -85,10 +95,11 @@ export function Home({
         </div>
 
         <TeamArc
-          ids={last?.members.map((m) => m.id) ?? [150, 250, 493, 384, 483]}
+          ids={last?.members.map((m) => m.id) ?? randomIds}
           shiny={last?.members.map((m) => m.shiny) ?? []}
           nicks={last?.members.map((m) => m.nickname) ?? []}
           onOpen={onOpen}
+          onReroll={!last ? () => setRandomIds(pickRandomTeamIds(6)) : undefined}
         />
       </section>
 
@@ -235,11 +246,13 @@ function TeamArc({
   shiny,
   nicks,
   onOpen,
+  onReroll,
 }: {
   ids: number[];
   shiny: boolean[];
   nicks: string[];
   onOpen: (speciesId: number, formId?: number) => void;
+  onReroll?: () => void;
 }) {
   const n = ids.length;
   const [soundOn, setSoundOn] = useState(readSoundEnabled);
@@ -497,25 +510,41 @@ function TeamArc({
         })}
       </ul>
 
-      <button
-        type="button"
-        aria-pressed={soundOn}
-        onClick={toggleSound}
-        title={soundOn ? "Desligar os sons ao passar o mouse" : "Ligar os sons ao passar o mouse"}
-        className="inline-flex items-center gap-1.5 rounded-full border border-line bg-surface px-3 py-1 text-xs font-semibold text-muted backdrop-blur transition-colors hover:border-ink hover:text-ink"
-      >
-        {soundOn ? (
-          <svg viewBox="0 0 24 24" className="size-3.5" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-            <path d="M11 5 6 9H3v6h3l5 4V5Z" strokeLinejoin="round" />
-            <path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13" strokeLinecap="round" />
-          </svg>
-        ) : (
-          <svg viewBox="0 0 24 24" className="size-3.5" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-            <path d="M11 5 6 9H3v6h3l5 4V5ZM22 9l-6 6M16 9l6 6" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
+      <div className="flex flex-wrap items-center justify-center gap-2">
+        <button
+          type="button"
+          aria-pressed={soundOn}
+          onClick={toggleSound}
+          title={soundOn ? "Desligar os sons ao passar o mouse" : "Ligar os sons ao passar o mouse"}
+          className="inline-flex items-center gap-1.5 rounded-full border border-line bg-surface px-3 py-1 text-xs font-semibold text-muted backdrop-blur transition-colors hover:border-ink hover:text-ink"
+        >
+          {soundOn ? (
+            <svg viewBox="0 0 24 24" className="size-3.5" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+              <path d="M11 5 6 9H3v6h3l5 4V5Z" strokeLinejoin="round" />
+              <path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13" strokeLinecap="round" />
+            </svg>
+          ) : (
+            <svg viewBox="0 0 24 24" className="size-3.5" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+              <path d="M11 5 6 9H3v6h3l5 4V5ZM22 9l-6 6M16 9l6 6" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          )}
+          <span>{soundOn ? "Som ligado" : "Som desligado"}</span>
+        </button>
+
+        {onReroll && (
+          <button
+            type="button"
+            onClick={onReroll}
+            title="Sortear outros 6 Pokémon"
+            className="inline-flex items-center gap-1.5 rounded-full border border-line bg-surface px-3 py-1 text-xs font-semibold text-muted backdrop-blur transition-colors hover:border-ink hover:text-ink"
+          >
+            <svg viewBox="0 0 24 24" className="size-3.5" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+              <path d="M21 12a9 9 0 0 0-15.5-6.3L3 8M3 3v5h5M3 12a9 9 0 0 0 15.5 6.3L21 16m0 5v-5h-5" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            <span>Sortear outros</span>
+          </button>
         )}
-        <span>{soundOn ? "Som ligado" : "Som desligado"}</span>
-      </button>
+      </div>
     </div>
   );
 }
