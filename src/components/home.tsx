@@ -55,7 +55,7 @@ export function Home({
   return (
     <div className="grid grid-cols-1 gap-12 pt-8 pb-6 sm:gap-14 sm:pt-14">
       {/* Abertura */}
-      <section className="grid grid-cols-1 items-center gap-8 sm:gap-10 lg:grid-cols-[1fr_1.1fr]">
+      <section className="grid grid-cols-1 items-center gap-8 sm:gap-10 lg:grid-cols-[0.88fr_1.22fr] lg:gap-12">
         <div className="min-w-0">
           <p className="font-mono text-[11px] tracking-[0.18em] text-muted uppercase">Dex Lab · montador de times</p>
           <h1 className="mt-3 font-display text-[2.35rem] leading-[0.98] font-extrabold tracking-[-0.045em] sm:text-6xl sm:leading-[0.95] lg:text-7xl">

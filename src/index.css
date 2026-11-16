@@ -182,7 +182,7 @@ body {
   align-items: center;
   list-style: none;
   margin: 0 auto;
-  padding: 1.25rem 0.25rem 2.25rem;
+  padding: 1.25rem 1.5rem 2.25rem;
   width: 100%;
   max-width: 100%;
 }
@@ -190,8 +190,8 @@ body {
   --i: 0;
   flex: 0 1 auto;
   min-width: 0;
-  margin-inline: -16px;
-  transform: translateY(calc(var(--abs-i, 0) * 20px)) rotate(calc(var(--i) * 7.5deg));
+  margin-inline: -18px;
+  transform: translateY(calc(var(--abs-i, 0) * 16px)) rotate(calc(var(--i) * 6deg));
   transform-origin: 50% 120%;
   z-index: var(--z, 10);
   transition:
@@ -200,7 +200,7 @@ body {
 }
 .legend-fan li:hover,
 .legend-fan li.armed {
-  transform: translateY(calc(var(--abs-i, 0) * 20px)) rotate(0deg);
+  transform: translateY(calc(var(--abs-i, 0) * 16px)) rotate(0deg);
   z-index: 30 !important;
   transition:
     transform 0.55s cubic-bezier(0.22, 1, 0.36, 1),
@@ -208,7 +208,7 @@ body {
 }
 .legend-card {
   display: grid;
-  width: clamp(108px, 12.5vw, 152px);
+  width: clamp(92px, 9.2vw, 120px);
   padding: 8px 8px 12px;
   border-radius: 16px;
   background: var(--surface-solid);

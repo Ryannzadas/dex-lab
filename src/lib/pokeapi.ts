@@ -82,11 +82,16 @@ export function formLabel(suffix: string) {
   return known[suffix] ?? displayName(suffix);
 }
 
+/** Sufixos padrão da PokéAPI que não precisam aparecer no nome ("mimikyu-disguised" → "Mimikyu"). */
+const DEFAULT_FORM_SUFFIX =
+  /-(disguised|normal|ordinary|incarnate|aria|standard|altered|land|red-striped|baile|midday|solo|average|50|single-strike|amped|ice|full-belly|male|plant|two-segment|zero|family-of-four|green-plumage|curly)$/;
+
 /** Nome de um Pokémon com a forma entre parênteses: "vulpix-alola" → "Vulpix (Alola)". */
 export function pokemonName(name: string) {
-  const m = name.match(FORM_SUFFIX);
-  if (!m) return displayName(name);
-  return `${displayName(name.slice(0, m.index))} (${formLabel(m[1])})`;
+  const clean = name.replace(DEFAULT_FORM_SUFFIX, "");
+  const m = clean.match(FORM_SUFFIX);
+  if (!m) return displayName(clean);
+  return `${displayName(clean.slice(0, m.index))} (${formLabel(m[1])})`;
 }
 
 function idFromUrl(url: string) {
