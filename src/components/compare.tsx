@@ -1,7 +1,6 @@
 import { animated, useSpring } from "@react-spring/web";
 import { useEffect, useState } from "react";
 import {
-  artworkUrl,
   displayName,
   getEvolution,
   spriteUrl,
@@ -11,6 +10,7 @@ import {
 } from "@/lib/pokeapi";
 import { usePrefersReducedMotion } from "@/lib/state";
 import { TYPE_INFO } from "@/lib/types";
+import { CryButton, ShinyArtwork } from "./media";
 import { PokemonSearch } from "./search";
 import { Card, SectionHeading, TypeBadge } from "./ui";
 
@@ -94,12 +94,15 @@ function Column({ pokemon, best, onRemove }: { pokemon: Pokemon; best: Record<st
         className="-mx-5 -mt-5 grid place-items-center rounded-t-3xl pt-6 pb-2"
         style={{ backgroundImage: `radial-gradient(70% 80% at 50% 40%, ${color}55, transparent 75%)` }}
       >
-        <img src={artworkUrl(pokemon.id)} alt="" width={160} height={160} className="size-40 drop-shadow-[0_10px_16px_rgb(0_0_0/0.2)]" />
+        <ShinyArtwork pokemon={pokemon} />
       </div>
 
       <div>
         <p className="font-mono text-xs text-muted">#{String(pokemon.id).padStart(4, "0")}</p>
-        <h3 className="font-display text-2xl font-bold tracking-tight">{displayName(pokemon.name)}</h3>
+        <div className="flex items-center justify-between gap-2">
+          <h3 className="font-display text-2xl font-bold tracking-tight">{displayName(pokemon.name)}</h3>
+          <CryButton pokemon={pokemon} />
+        </div>
         <div className="mt-2 flex gap-1.5">
           {pokemon.types.map((t) => (
             <TypeBadge key={t} type={t} />

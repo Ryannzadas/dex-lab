@@ -25,6 +25,8 @@ export type Pokemon = {
   height: number; // decímetros
   weight: number; // hectogramas
   speciesUrl: string;
+  /** Grito do Pokémon (arquivo .ogg). `latest` é o atual; `legacy`, o dos jogos antigos. */
+  cry: string | null;
 };
 
 export type EvolutionStage = { id: number; name: string; depth: number };
@@ -38,8 +40,8 @@ export const STAT_LABEL: Record<StatKey, string> = {
   speed: "Velocidade",
 };
 
-export function artworkUrl(id: number) {
-  return `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/${id}.png`;
+export function artworkUrl(id: number, shiny = false) {
+  return `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/${shiny ? "shiny/" : ""}${id}.png`;
 }
 
 export function spriteUrl(id: number) {
@@ -109,6 +111,7 @@ type RawPokemon = {
   height: number;
   weight: number;
   species: { url: string };
+  cries?: { latest: string | null; legacy: string | null };
 };
 
 export function getPokemon(id: number): Promise<Pokemon> {
@@ -124,6 +127,7 @@ export function getPokemon(id: number): Promise<Pokemon> {
     height: p.height,
     weight: p.weight,
     speciesUrl: p.species.url,
+    cry: p.cries?.latest ?? p.cries?.legacy ?? null,
   }));
   promise.catch(() => pokemonCache.delete(id));
   pokemonCache.set(id, promise);
