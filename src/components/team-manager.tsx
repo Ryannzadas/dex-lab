@@ -4,7 +4,7 @@ import { exportShowdown, importShowdown } from "@/lib/showdown";
 import type { TeamsApi } from "@/lib/team";
 import { drawTeamCard } from "@/lib/team-image";
 import { useMoveInfos } from "@/lib/use-moves";
-import { Card } from "./ui";
+import { Card, CustomSelect, type SelectOption } from "./ui";
 import { GAMES, gameById } from "@/lib/games";
 
 type Panel = null | "rename" | "import" | "export" | "delete" | "image";
@@ -357,35 +357,40 @@ function GameSelect({ api }: { api: TeamsApi }) {
   const id = useId();
   const game = gameById(api.active.game);
   const gens = [...new Set(GAMES.filter((g) => g.kind === "official").map((g) => g.gen))];
+  const options: SelectOption[] = [
+    { value: "", label: "Livre (sem jogo)", hint: "Nacional" },
+    ...gens.flatMap((gen) =>
+      GAMES.filter((g) => g.kind === "official" && g.gen === gen).map((g) => ({
+        value: g.id,
+        label: g.label,
+        hint: g.region,
+        group: `${gen}ª geração`,
+        dot: `linear-gradient(135deg, ${g.colors[0]}, ${g.colors[1]})`,
+      })),
+    ),
+    ...GAMES.filter((g) => g.kind === "hack").map((g) => ({
+      value: g.id,
+      label: g.label,
+      hint: `até Gen ${g.maxGen}`,
+      group: "ROM hacks",
+      dot: `linear-gradient(135deg, ${g.colors[0]}, ${g.colors[1]})`,
+    })),
+  ];
+
   return (
-    <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1.5">
+    <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2">
       <label htmlFor={id} className="text-sm font-semibold">
         Jogo do time
       </label>
-      <select
+      <CustomSelect
         id={id}
         value={api.active.game ?? ""}
-        onChange={(e) => api.setGame(api.active.id, e.target.value || null)}
-        className="rounded-xl border border-line bg-surface-solid px-3 py-1.5 text-sm outline-none focus:border-ink"
-      >
-        <option value="">Livre (sem jogo)</option>
-        {gens.map((gen) => (
-          <optgroup key={gen} label={`${gen}ª geração`}>
-            {GAMES.filter((g) => g.kind === "official" && g.gen === gen).map((g) => (
-              <option key={g.id} value={g.id}>
-                {g.label}
-              </option>
-            ))}
-          </optgroup>
-        ))}
-        <optgroup label="ROM hacks">
-          {GAMES.filter((g) => g.kind === "hack").map((g) => (
-            <option key={g.id} value={g.id}>
-              {g.label}
-            </option>
-          ))}
-        </optgroup>
-      </select>
+        onChange={(val) => api.setGame(api.active.id, val || null)}
+        options={options}
+        searchable
+        searchPlaceholder="Buscar jogo ou região…"
+        className="w-64 sm:w-72"
+      />
       {game && (
         <span className="text-xs text-muted">
           {game.kind === "hack"

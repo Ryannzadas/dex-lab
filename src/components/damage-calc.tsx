@@ -6,10 +6,8 @@ import type { Member } from "@/lib/team";
 import { isTypeName, TYPE_INFO } from "@/lib/types";
 import { useMoveInfos } from "@/lib/use-moves";
 import { PokemonSearch } from "./search";
-import { Card, SectionHeading, TypeBadge } from "./ui";
+import { Card, CustomSelect, SectionHeading, TypeBadge } from "./ui";
 
-const field =
-  "w-full rounded-xl border border-line bg-surface-solid px-3 py-2 text-sm outline-none transition-colors focus:border-ink disabled:opacity-50";
 const label = "mb-1 block text-xs font-semibold text-muted";
 
 const pct = (n: number) => `${n.toLocaleString("pt-BR", { maximumFractionDigits: 1, minimumFractionDigits: 1 })}%`;
@@ -76,39 +74,37 @@ export function DamageCalc({ team, members, game }: { team: Pokemon[]; members: 
           <div className="grid gap-3">
             <div>
               <label htmlFor={`${uid}-atk`} className={label}>Membro do time</label>
-              <select
+              <CustomSelect
                 id={`${uid}-atk`}
-                className={field}
-                value={attacker.id}
-                onChange={(e) => {
-                  setAttackerId(Number(e.target.value));
+                value={String(attacker.id)}
+                onChange={(val) => {
+                  setAttackerId(Number(val));
                   setMoveName("");
                   setTera(false);
                 }}
-              >
-                {team.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {members.find((m) => m.id === p.id)?.nickname || pokemonName(p.name)}
-                  </option>
-                ))}
-              </select>
+                options={team.map((p) => ({
+                  value: String(p.id),
+                  label: members.find((m) => m.id === p.id)?.nickname || pokemonName(p.name),
+                  hint: `Nv ${members.find((m) => m.id === p.id)?.level ?? 50}`,
+                  dot: TYPE_INFO[p.types[0]].color,
+                }))}
+              />
             </div>
             <div>
               <label htmlFor={`${uid}-move`} className={label}>Golpe</label>
-              <select
+              <CustomSelect
                 id={`${uid}-move`}
-                className={field}
                 value={move?.name ?? ""}
-                onChange={(e) => setMoveName(e.target.value)}
+                onChange={setMoveName}
                 disabled={damaging.length === 0}
-              >
-                {damaging.length === 0 && <option value="">Escolha golpes de dano no editor</option>}
-                {damaging.map((m) => (
-                  <option key={m} value={m}>
-                    {displayName(m)} · {infos[m].power}
-                  </option>
-                ))}
-              </select>
+                placeholder="Escolha golpes de dano no editor"
+                options={damaging.map((m) => ({
+                  value: m,
+                  label: displayName(m),
+                  hint: `Poder ${infos[m].power}`,
+                  dot: infos[m].type ? TYPE_INFO[infos[m].type!].color : undefined,
+                }))}
+              />
             </div>
             <label className={`inline-flex items-center gap-2 text-sm ${teraType ? "cursor-pointer" : "opacity-50"}`}>
               <input type="checkbox" checked={tera && !!teraType} disabled={!teraType} onChange={(e) => setTera(e.target.checked)} className="size-4" />
@@ -142,13 +138,15 @@ export function DamageCalc({ team, members, game }: { team: Pokemon[]; members: 
           )}
           <div>
             <label htmlFor={`${uid}-preset`} className={label}>Investimento do alvo</label>
-            <select id={`${uid}-preset`} className={field} value={preset} onChange={(e) => setPreset(e.target.value as DefenderPreset)}>
-              {(Object.keys(DEFENDER_PRESETS) as DefenderPreset[]).map((k) => (
-                <option key={k} value={k}>
-                  {DEFENDER_PRESETS[k].label}
-                </option>
-              ))}
-            </select>
+            <CustomSelect
+              id={`${uid}-preset`}
+              value={preset}
+              onChange={(val) => setPreset(val as DefenderPreset)}
+              options={(Object.keys(DEFENDER_PRESETS) as DefenderPreset[]).map((k) => ({
+                value: k,
+                label: DEFENDER_PRESETS[k].label,
+              }))}
+            />
             <p className="mt-1 text-[11px] text-muted">Mesmo nível do atacante (Nv {member.level}), IVs 31.</p>
           </div>
         </div>
