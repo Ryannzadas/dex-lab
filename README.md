@@ -24,6 +24,11 @@ Clique num membro do time para abrir o editor dele (inspirado no montador da Fir
 
 Com golpes escolhidos, a cobertura da análise passa a usar os **golpes de dano** do time e avisa quem ainda está sem golpe. A configuração inteira vai junto no link de compartilhar.
 
+#### Velocidade e Tera
+
+- **Quem ataca primeiro:** escada com a velocidade final de cada membro (nível, natureza, EVs, IVs e Choice Scarf) ao lado da velocidade máxima de Pokémon comuns no competitivo, como Dragapult, Flutter Mane e Garchomp.
+- **Com Tera:** botão na tabela de fraquezas que mostra a defesa do time depois de terastalizar. Quem tem Tipo Tera passa a defender só com ele. O resumo de pontos fracos acompanha.
+
 #### Vários times e Showdown
 
 - **Meus times:** guarde vários times no navegador, cada um com nome, e crie, troque, renomeie, duplique ou exclua quando quiser.

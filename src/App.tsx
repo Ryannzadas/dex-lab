@@ -116,7 +116,8 @@ export default function App() {
           />
         ) : (
           <>
-            <Hero />
+            {/* O título grande só aparece na aba Time; nas outras o conteúdo começa logo. */}
+            {tab === "time" ? <Hero /> : <div className="h-8" aria-hidden="true" />}
             <div role="tabpanel" id={`painel-${tab}`} aria-labelledby={`aba-${tab}`} className="scroll-mt-24">
               {tab === "time" ? (
                 <div className="grid grid-cols-1 gap-6">
@@ -180,6 +181,14 @@ function Toolbar({
   themeMode: ThemeMode;
   toggleTheme: () => void;
 }) {
+  // Depois de rolar um pouco, o topo ganha fundo desfocado para não ficar por cima do texto.
+  const [scrolled, setScrolled] = useState(() => window.scrollY > 8);
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 8);
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
   const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
     {
       id: "time",
@@ -215,7 +224,11 @@ function Toolbar({
   ];
 
   return (
-    <header className="sticky top-0 z-40 px-4 pt-4 sm:px-6">
+    <header
+      className={`sticky top-0 z-40 px-4 pt-4 pb-3 transition-[background-color,border-color,backdrop-filter] duration-300 sm:px-6 ${
+        scrolled ? "border-b border-line bg-bg/70 backdrop-blur-xl" : "border-b border-transparent"
+      }`}
+    >
       <div className="mx-auto flex max-w-6xl items-center justify-between gap-3">
         <a
           href="./"

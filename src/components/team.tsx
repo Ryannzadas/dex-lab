@@ -1,12 +1,13 @@
 import { animated, useTransition } from "@react-spring/web";
 import { useState } from "react";
-import { coverageFromTypes, defenseTable, offensiveCoverage, suggestTypes } from "@/lib/analysis";
+import { coverageFromTypes, defenseTable, offensiveCoverage, suggestTypes, teraDefenseTypes } from "@/lib/analysis";
 import { artworkUrl, pokemonName, speciesIdOf, type Pokemon } from "@/lib/pokeapi";
 import { usePrefersReducedMotion } from "@/lib/state";
 import { MAX_TEAM, type Member } from "@/lib/team";
 import { useMoveInfos } from "@/lib/use-moves";
 import { TYPE_INFO, type TypeName } from "@/lib/types";
 import { MemberEditor } from "./member-editor";
+import { SpeedTiers } from "./speed";
 import { PokemonSearch } from "./search";
 import { ArrowIcon, Card, SectionHeading, TypeBadge } from "./ui";
 
@@ -265,7 +266,12 @@ function multClass(v: number) {
 }
 
 function Analysis({ team, members }: { team: Pokemon[]; members: Member[] }) {
-  const rows = defenseTable(team);
+  // "Com Tera": cada membro com Tipo Tera passa a defender só com o tipo Tera.
+  const [withTera, setWithTera] = useState(false);
+  const teraOf = (p: Pokemon) => members.find((m) => m.id === p.id)?.tera ?? null;
+  const hasTera = team.some((p) => { const t = teraOf(p); return !!t && t !== "stellar"; });
+  const useTera = withTera && hasTera;
+  const rows = defenseTable(team.map((p) => ({ types: useTera ? teraDefenseTypes(p.types, teraOf(p)) : p.types })));
   const problems = rows.filter((r) => r.problem);
   const suggestions = suggestTypes(team);
 
@@ -284,7 +290,7 @@ function Analysis({ team, members }: { team: Pokemon[]; members: Member[] }) {
     <>
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <Card className="lg:col-span-1">
-          <SectionHeading kicker="Resumo" title="Pontos fracos" />
+          <SectionHeading kicker={useTera ? "Resumo · com Tera" : "Resumo"} title="Pontos fracos" />
           {problems.length === 0 ? (
             <p className="text-sm text-muted">Nenhum tipo pega mais da metade do time desprotegida. Boa!</p>
           ) : (
@@ -355,10 +361,36 @@ function Analysis({ team, members }: { team: Pokemon[]; members: Member[] }) {
         </Card>
       </div>
 
+      <SpeedTiers team={team} members={members} />
+
       <Card>
-        <SectionHeading kicker="Defesa" title="Tabela de fraquezas">
-          Quanto dano cada tipo de ataque causa em cada membro. Vermelho é fraqueza, verde é resistência e preto é imunidade.
-        </SectionHeading>
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <SectionHeading kicker="Defesa" title="Tabela de fraquezas">
+            Quanto dano cada tipo de ataque causa em cada membro. Vermelho é fraqueza, verde é resistência e preto é imunidade.
+          </SectionHeading>
+          <div className="mb-5">
+            <div role="group" aria-label="Tipos usados na defesa" className="flex gap-1 rounded-2xl border border-line p-1">
+              {[
+                { on: false, label: "Tipos normais" },
+                { on: true, label: "Com Tera" },
+              ].map((o) => (
+                <button
+                  key={o.label}
+                  type="button"
+                  aria-pressed={useTera === o.on}
+                  disabled={o.on && !hasTera}
+                  onClick={() => setWithTera(o.on)}
+                  className={`rounded-xl px-3 py-1.5 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-45 ${
+                    useTera === o.on ? "bg-ink text-bg" : "text-muted hover:bg-line/60 hover:text-ink"
+                  }`}
+                >
+                  {o.label}
+                </button>
+              ))}
+            </div>
+            {!hasTera && <p className="mt-1 text-right text-[11px] text-muted">Escolha um Tipo Tera no editor</p>}
+          </div>
+        </div>
         <div className="scroll-x -mx-2 overflow-x-auto px-2">
           <table className="w-full min-w-[560px] border-separate border-spacing-1 text-sm">
             <thead>
@@ -369,6 +401,11 @@ function Analysis({ team, members }: { team: Pokemon[]; members: Member[] }) {
                 {team.map((p) => (
                   <th key={p.id} scope="col" className="font-normal">
                     <img src={artworkUrl(p.id)} alt={pokemonName(p.name)} title={pokemonName(p.name)} width={40} height={40} className="mx-auto size-10" loading="lazy" />
+                    {useTera && teraOf(p) && teraOf(p) !== "stellar" && (
+                      <span className="mt-0.5 block">
+                        <TypeBadge type={teraOf(p) as TypeName} size="sm" />
+                      </span>
+                    )}
                   </th>
                 ))}
                 <th scope="col" className="text-xs font-medium text-muted">Fracos</th>

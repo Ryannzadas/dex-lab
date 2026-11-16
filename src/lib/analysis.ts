@@ -12,7 +12,8 @@ export type DefenseRow = {
   problem: boolean;
 };
 
-export function defenseTable(team: Pokemon[]): DefenseRow[] {
+/** Aceita Pokémon ou só os tipos de defesa (por exemplo, já trocados pelo Tipo Tera). */
+export function defenseTable(team: { types: TypeName[] }[]): DefenseRow[] {
   return TYPES.map((attack) => {
     const values = team.map((p) => multiplier(attack, p.types));
     const weak = values.filter((v) => v > 1).length;
@@ -20,6 +21,14 @@ export function defenseTable(team: Pokemon[]): DefenseRow[] {
     const immune = values.filter((v) => v === 0).length;
     return { attack, values, weak, resist, immune, problem: weak >= 2 && weak > resist + immune };
   });
+}
+
+/**
+ * Tipos de defesa depois de terastalizar: o Tipo Tera substitui os tipos originais.
+ * Estelar e "sem Tera" mantêm os tipos de sempre.
+ */
+export function teraDefenseTypes(types: TypeName[], tera: string | null): TypeName[] {
+  return tera && tera !== "stellar" && (TYPES as readonly string[]).includes(tera) ? [tera as TypeName] : types;
 }
 
 /** Tipos que algum golpe do mesmo tipo do time (STAB) acerta como super efetivo. */

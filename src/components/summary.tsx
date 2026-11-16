@@ -15,6 +15,8 @@ import {
 import { multiplier, TYPE_INFO, TYPES, type TypeName } from "@/lib/types";
 import { Info, StatBar } from "./compare";
 import { CryButton, ShinyArtwork } from "./media";
+import { CATEGORY_PT } from "@/lib/moves";
+import { useMoveInfos } from "@/lib/use-moves";
 import { ArrowIcon, Card, TypeBadge } from "./ui";
 
 type Props = {
@@ -397,6 +399,8 @@ function Moves({ pokemon: form, fallback }: { pokemon: Pokemon; fallback: Pokemo
   const list: LearnedMove[] = pokemon.moves
     .filter((m) => m.method === active)
     .sort((a, b) => (active === "level" ? a.level - b.level : 0) || a.name.localeCompare(b.name));
+  // Detalhes (tipo, categoria, poder) só dos golpes da aba aberta.
+  const infos = useMoveInfos(list.map((m) => m.name));
 
   return (
     <Card>
@@ -431,18 +435,35 @@ function Moves({ pokemon: form, fallback }: { pokemon: Pokemon; fallback: Pokemo
       {list.length === 0 ? (
         <p className="text-sm text-muted">Sem golpes registrados para esta forma.</p>
       ) : (
-        <ul className="grid grid-cols-1 gap-1.5 sm:grid-cols-2 lg:grid-cols-3">
-          {list.map((m) => (
-            <li key={`${m.name}-${m.level}`} className="flex items-center justify-between gap-3 rounded-xl border border-line px-3 py-2 text-sm">
-              <span className="font-medium">{displayName(m.name)}</span>
-              {active === "level" && (
-                <span className="font-mono text-xs text-muted">{m.level <= 1 ? "Nv 1" : `Nv ${m.level}`}</span>
-              )}
-            </li>
-          ))}
+        <ul className="grid grid-cols-1 gap-1.5 md:grid-cols-2">
+          {list.map((m) => {
+            const info = infos[m.name];
+            return (
+              <li
+                key={`${m.name}-${m.level}`}
+                className="flex items-center gap-3 rounded-xl border border-line px-3 py-2 text-sm"
+              >
+                {active === "level" && (
+                  <span className="w-11 shrink-0 font-mono text-xs text-muted">{m.level <= 1 ? "Nv 1" : `Nv ${m.level}`}</span>
+                )}
+                <span className="min-w-0 flex-1 truncate font-medium">{displayName(m.name)}</span>
+                {info ? (
+                  <span className="flex shrink-0 items-center gap-2">
+                    {info.type && <TypeBadge type={info.type} size="sm" />}
+                    <span className="w-14 text-xs text-muted">{CATEGORY_PT[info.category]}</span>
+                    <span className="w-9 text-right font-mono text-xs" title="Poder">
+                      {info.power ?? "—"}
+                    </span>
+                  </span>
+                ) : (
+                  <span className="h-4 w-32 shrink-0 animate-pulse rounded-full bg-line" aria-hidden="true" />
+                )}
+              </li>
+            );
+          })}
         </ul>
       )}
-      <p className="mt-3 text-xs text-muted">Nomes dos golpes em inglês, como na PokéAPI.</p>
+      <p className="mt-3 text-xs text-muted">Nomes dos golpes em inglês, como na PokéAPI. A última coluna é o poder.</p>
     </Card>
   );
 }
