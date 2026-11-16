@@ -19,8 +19,10 @@ import { ArrowIcon, Card, TypeBadge } from "./ui";
 
 type Props = {
   speciesId: number;
+  /** Forma que abre selecionada (ex.: Vulpix de Alola). */
+  initialFormId?: number | null;
   onClose: () => void;
-  onOpen: (speciesId: number) => void;
+  onOpen: (speciesId: number, formId?: number) => void;
   onAddToTeam: (id: number) => void;
   onCompare: (id: number) => void;
   teamIds: number[];
@@ -29,7 +31,7 @@ type Props = {
 };
 
 /** Resumo completo de um Pokémon, com abas para cada forma (Normal, Mega X, Alola…). */
-export function SummaryView({ speciesId, onClose, onOpen, onAddToTeam, onCompare, teamIds, compareIds, onTypes }: Props) {
+export function SummaryView({ speciesId, initialFormId, onClose, onOpen, onAddToTeam, onCompare, teamIds, compareIds, onTypes }: Props) {
   const [species, setSpecies] = useState<Species | null>(null);
   const [formId, setFormId] = useState<number | null>(null);
   const [pokemon, setPokemon] = useState<Pokemon | null>(null);
@@ -42,14 +44,15 @@ export function SummaryView({ speciesId, onClose, onOpen, onAddToTeam, onCompare
       .then((s) => {
         if (!alive) return;
         setSpecies(s);
-        setFormId(s.varieties.find((v) => v.isDefault)?.id ?? speciesId);
+        const wanted = s.varieties.find((v) => v.id === initialFormId);
+        setFormId(wanted?.id ?? s.varieties.find((v) => v.isDefault)?.id ?? speciesId);
       })
       .catch(() => alive && setError(true));
     window.scrollTo({ top: 0 });
     return () => {
       alive = false;
     };
-  }, [speciesId]);
+  }, [speciesId, initialFormId]);
 
   // Forma padrão: Megas e Gigantamax usam os golpes dela.
   const [baseForm, setBaseForm] = useState<Pokemon | null>(null);
@@ -247,7 +250,11 @@ function Header({
           <blockquote className="braces text-[15px] leading-relaxed" lang="en">
             {species.flavor}
           </blockquote>
-          <figcaption className="mt-2 text-xs text-muted">Pokédex de {species.flavorVersion} · texto original em inglês</figcaption>
+          <figcaption className="mt-2 text-xs text-muted">
+            Pokédex de {species.flavorVersion} · texto original em inglês
+            {/* A PokéAPI só tem descrição por espécie, então formas mostram a da forma normal. */}
+            {species.varieties.some((v) => v.id === pokemon.id && !v.isDefault) && " · descrição da forma normal"}
+          </figcaption>
         </figure>
       )}
     </Card>

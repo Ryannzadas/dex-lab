@@ -20,9 +20,15 @@ function readSummary(): number | null {
   return Number.isInteger(n) && n > 0 ? n : null;
 }
 
+function readForm(): number | null {
+  const n = Number(new URLSearchParams(window.location.search).get("forma"));
+  return Number.isInteger(n) && n > 0 ? n : null;
+}
+
 export default function App() {
   const [tab, setTab] = useState<Tab>(readTab);
   const [summaryId, setSummaryId] = useState<number | null>(readSummary);
+  const [formId, setFormId] = useState<number | null>(readForm);
   const [summaryTypes, setSummaryTypes] = useState<TypeName[]>([]);
   const team = useIdList("time", 6);
   const compare = useIdList("comparar", 4);
@@ -39,16 +45,22 @@ export default function App() {
 
   // O resumo vive no link (?pokemon=6), então o botão "voltar" do navegador fecha ele.
   useEffect(() => {
-    const onPop = () => setSummaryId(readSummary());
+    const onPop = () => {
+      setSummaryId(readSummary());
+      setFormId(readForm());
+    };
     window.addEventListener("popstate", onPop);
     return () => window.removeEventListener("popstate", onPop);
   }, []);
 
-  const openSummary = useCallback((speciesId: number) => {
+  const openSummary = useCallback((speciesId: number, form?: number) => {
     const url = new URL(window.location.href);
     url.searchParams.set("pokemon", String(speciesId));
+    if (form && form !== speciesId) url.searchParams.set("forma", String(form));
+    else url.searchParams.delete("forma");
     window.history.pushState({ summary: true }, "", url);
     setSummaryId(speciesId);
+    setFormId(form && form !== speciesId ? form : null);
   }, []);
 
   const closeSummary = useCallback(() => {
@@ -58,8 +70,10 @@ export default function App() {
     }
     const url = new URL(window.location.href);
     url.searchParams.delete("pokemon");
+    url.searchParams.delete("forma");
     window.history.pushState(null, "", url);
     setSummaryId(null);
+    setFormId(null);
   }, []);
 
   const goToTab = (t: Tab) => {
@@ -78,8 +92,9 @@ export default function App() {
       <main className="mx-auto max-w-6xl px-4 pb-16 sm:px-6">
         {summaryId !== null ? (
           <SummaryView
-            key={summaryId}
+            key={`${summaryId}-${formId}`}
             speciesId={summaryId}
+            initialFormId={formId}
             onClose={closeSummary}
             onOpen={openSummary}
             onAddToTeam={team.add}

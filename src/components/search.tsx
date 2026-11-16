@@ -1,5 +1,5 @@
 import { useEffect, useId, useMemo, useRef, useState } from "react";
-import { displayName, getPokemonList, spriteUrl, type PokemonRef } from "@/lib/pokeapi";
+import { artworkUrl, getPokemonList, pokemonName, spriteUrl, type PokemonRef } from "@/lib/pokeapi";
 
 type Props = {
   onPick: (id: number) => void;
@@ -9,7 +9,7 @@ type Props = {
   label: string;
 };
 
-const MAX_RESULTS = 8;
+const MAX_RESULTS = 10;
 
 /** Busca por nome ou número, com navegação por teclado (padrão combobox). */
 export function PokemonSearch({ onPick, disabled, exclude = [], placeholder, label }: Props) {
@@ -32,10 +32,23 @@ export function PokemonSearch({ onPick, disabled, exclude = [], placeholder, lab
     if (!list || !query.trim()) return [];
     const q = query.trim().toLowerCase().replace(/^#/, "");
     const asNumber = Number(q);
+    if (Number.isInteger(asNumber) && asNumber > 0) {
+      return list.filter((p) => p.id === asNumber && !exclude.includes(p.id));
+    }
+    // Todas as palavras precisam aparecer: "vulpix alola", "alola" ou "mega charizard".
+    const words = q.split(/[\s-]+/).filter(Boolean);
+    const first = words[0] ?? "";
     return list
       .filter((p) => !exclude.includes(p.id))
-      .filter((p) => (Number.isInteger(asNumber) && asNumber > 0 ? p.id === asNumber : p.name.includes(q.replace(/\s+/g, "-"))))
-      .sort((a, b) => Number(!a.name.startsWith(q)) - Number(!b.name.startsWith(q)) || a.id - b.id)
+      .filter((p) => words.every((w) => p.name.includes(w)))
+      .sort((a, b) => {
+        const sa = a.name.startsWith(first);
+        const sb = b.name.startsWith(first);
+        if (sa !== sb) return sa ? -1 : 1;
+        // Quem começa com a busca: forma padrão antes das regionais/Mega ("vulpix" antes de "vulpix-alola").
+        if (sa) return a.name.length - b.name.length || a.id - b.id;
+        return a.id - b.id;
+      })
       .slice(0, MAX_RESULTS);
   }, [list, query, exclude]);
 
@@ -120,9 +133,28 @@ export function PokemonSearch({ onPick, disabled, exclude = [], placeholder, lab
               onMouseEnter={() => setActive(i)}
               className={`flex cursor-pointer items-center gap-3 rounded-xl px-2 py-1.5 ${i === active ? "bg-line/70" : ""}`}
             >
-              <img src={spriteUrl(p.id)} alt="" width={40} height={40} loading="lazy" className="size-10 [image-rendering:pixelated]" />
-              <span className="font-medium">{displayName(p.name)}</span>
-              <span className="ml-auto font-mono text-xs text-muted">#{String(p.id).padStart(4, "0")}</span>
+              <img
+                src={spriteUrl(p.id)}
+                alt=""
+                width={40}
+                height={40}
+                loading="lazy"
+                // Algumas formas não têm sprite pequeno: usa a arte oficial.
+                onError={(e) => {
+                  const img = e.currentTarget;
+                  if (!img.dataset.fallback) {
+                    img.dataset.fallback = "1";
+                    img.src = artworkUrl(p.id);
+                    img.style.imageRendering = "auto";
+                  }
+                }}
+                className="size-10 object-contain [image-rendering:pixelated]"
+              />
+              <span className="font-medium">{pokemonName(p.name)}</span>
+              <span className="ml-auto font-mono text-xs text-muted">
+                {/* Formas têm id interno (acima de 10000) que não é número da Pokédex. */}
+                {p.id > 10000 ? "forma" : `#${String(p.id).padStart(4, "0")}`}
+              </span>
             </li>
           ))}
         </ul>

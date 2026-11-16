@@ -8,7 +8,7 @@ import { isTypeName, type TypeName } from "./types";
 
 const API = "https://pokeapi.co/api/v2";
 const LAST_ID = 1025; // última espécie da geração 9
-const LIST_KEY = "dexlab:lista:v1";
+const LIST_KEY = "dexlab:lista:v2"; // v2: inclui as formas regionais e Mega
 const WEEK = 7 * 24 * 60 * 60 * 1000;
 
 export type PokemonRef = { id: number; name: string };
@@ -59,6 +59,22 @@ export function displayName(name: string) {
     .join(" ");
 }
 
+/** Sufixos de formas que valem a pena na busca: regionais e transformações de batalha. */
+const FORM_SUFFIX = /-(alola|galar(?:-[a-z]+)?|hisui|paldea(?:-[a-z-]+)?|mega(?:-[xyz])?|primal|gmax)$/;
+
+/** "alola" → "Alola", "mega-x" → "Mega X", "gmax" → "Gigantamax". */
+export function formLabel(suffix: string) {
+  const known: Record<string, string> = { gmax: "Gigantamax", "mega-x": "Mega X", "mega-y": "Mega Y", "mega-z": "Mega Z" };
+  return known[suffix] ?? displayName(suffix);
+}
+
+/** Nome de um Pokémon com a forma entre parênteses: "vulpix-alola" → "Vulpix (Alola)". */
+export function pokemonName(name: string) {
+  const m = name.match(FORM_SUFFIX);
+  if (!m) return displayName(name);
+  return `${displayName(name.slice(0, m.index))} (${formLabel(m[1])})`;
+}
+
 function idFromUrl(url: string) {
   return Number(url.replace(/\/$/, "").split("/").pop());
 }
@@ -71,7 +87,10 @@ async function getJson<T>(url: string): Promise<T> {
 
 let listPromise: Promise<PokemonRef[]> | null = null;
 
-/** Todas as espécies (só id e nome), para a busca. */
+/**
+ * Todas as espécies + formas regionais, Mega, Primal e Gigantamax (só id e nome), para a busca.
+ * Formas cosméticas (bonés, totens…) ficam de fora.
+ */
 export function getPokemonList(): Promise<PokemonRef[]> {
   if (listPromise) return listPromise;
 
@@ -84,11 +103,11 @@ export function getPokemonList(): Promise<PokemonRef[]> {
     // cache ilegível: busca de novo
   }
 
-  listPromise = getJson<{ results: { name: string; url: string }[] }>(
-    `${API}/pokemon-species?limit=${LAST_ID}`,
-  )
+  listPromise = getJson<{ results: { name: string; url: string }[] }>(`${API}/pokemon?limit=2000`)
     .then((data) => {
-      const list = data.results.map((r) => ({ id: idFromUrl(r.url), name: r.name }));
+      const list = data.results
+        .map((r) => ({ id: idFromUrl(r.url), name: r.name }))
+        .filter((p) => p.id <= LAST_ID || (FORM_SUFFIX.test(p.name) && !/-(cap|totem|starter)/.test(p.name)));
       try {
         localStorage.setItem(LIST_KEY, JSON.stringify({ at: Date.now(), list }));
       } catch {
@@ -238,18 +257,8 @@ function getCached<T>(url: string): Promise<T> {
 function varietyLabel(species: string, name: string, isDefault: boolean) {
   if (isDefault) return "Normal";
   const rest = name.startsWith(`${species}-`) ? name.slice(species.length + 1) : name;
-  const known: Record<string, string> = {
-    mega: "Mega",
-    "mega-x": "Mega X",
-    "mega-y": "Mega Y",
-    gmax: "Gigantamax",
-    alola: "Alola",
-    galar: "Galar",
-    hisui: "Hisui",
-    paldea: "Paldea",
-    primal: "Primal",
-  };
-  return known[rest] ?? displayName(rest);
+  const known: Record<string, string> = { mega: "Mega", primal: "Primal" };
+  return known[rest] ?? formLabel(rest);
 }
 
 const GENERATIONS = ["i", "ii", "iii", "iv", "v", "vi", "vii", "viii", "ix"];

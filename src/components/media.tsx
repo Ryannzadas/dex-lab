@@ -1,6 +1,6 @@
 import { animated, useSpring } from "@react-spring/web";
 import { useEffect, useRef, useState } from "react";
-import { artworkUrl, displayName, type Pokemon } from "@/lib/pokeapi";
+import { artworkUrl, pokemonName, type Pokemon } from "@/lib/pokeapi";
 import { usePrefersReducedMotion } from "@/lib/state";
 
 /** Toca o grito do Pokémon. Os arquivos são .ogg; se o navegador não tocar, avisa. */
@@ -16,13 +16,13 @@ export function CryButton({ pokemon }: { pokemon: Pokemon }) {
   }, [pokemon.id]);
 
   if (!pokemon.cry) return null;
-  const name = displayName(pokemon.name);
+  const name = pokemonName(pokemon.name);
 
   const play = async () => {
     try {
       audioRef.current?.pause();
       const audio = new Audio(pokemon.cry!);
-      audio.volume = 0.5;
+      audio.volume = 0.2; // os gritos vêm bem altos nos arquivos originais
       audioRef.current = audio;
       audio.onended = () => setState("idle");
       setState("playing");
@@ -77,7 +77,7 @@ export function ShinyArtwork({ pokemon, size = 160 }: { pokemon: Pokemon; size?:
   const [shiny, setShiny] = useState(false);
   const [burst, setBurst] = useState(0);
   const reduce = usePrefersReducedMotion();
-  const name = displayName(pokemon.name);
+  const name = pokemonName(pokemon.name);
 
   const [spring, api] = useSpring(() => ({
     transform: "scale(1) rotateY(0deg)",

@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import {
   displayName,
   getEvolution,
+  pokemonName,
   speciesIdOf,
   spriteUrl,
   STAT_LABEL,
@@ -24,7 +25,7 @@ type Props = {
   pending: number[];
   onAdd: (id: number) => void;
   onRemove: (id: number) => void;
-  onOpen: (speciesId: number) => void;
+  onOpen: (speciesId: number, formId?: number) => void;
 };
 
 export function CompareTab({ ids, list, pending, onAdd, onRemove, onOpen }: Props) {
@@ -53,7 +54,7 @@ export function CompareTab({ ids, list, pending, onAdd, onRemove, onOpen }: Prop
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           {list.map((p) => (
-            <Column key={p.id} pokemon={p} best={best} onRemove={() => onRemove(p.id)} onOpen={() => onOpen(speciesIdOf(p))} />
+            <Column key={p.id} pokemon={p} best={best} onRemove={() => onRemove(p.id)} onOpen={() => onOpen(speciesIdOf(p), p.id)} />
           ))}
           {pending.map((id) => (
             <div key={id} className="h-96 animate-pulse rounded-3xl border border-line bg-line/40" aria-label="Carregando" />
@@ -94,7 +95,7 @@ function Column({
       <button
         type="button"
         onClick={onRemove}
-        aria-label={`Remover ${displayName(pokemon.name)} da comparação`}
+        aria-label={`Remover ${pokemonName(pokemon.name)} da comparação`}
         className="absolute top-4 right-4 grid size-8 place-items-center rounded-full border border-line text-muted transition hover:border-ink hover:text-ink"
       >
         <svg viewBox="0 0 24 24" className="size-3.5" fill="none" stroke="currentColor" strokeWidth="2.4" aria-hidden="true">
@@ -119,7 +120,7 @@ function Column({
               className="text-left underline decoration-line decoration-2 underline-offset-4 transition-colors hover:decoration-ink"
               title="Ver resumo completo"
             >
-              {displayName(pokemon.name)}
+              {pokemonName(pokemon.name)}
             </button>
           </h3>
           <CryButton pokemon={pokemon} />

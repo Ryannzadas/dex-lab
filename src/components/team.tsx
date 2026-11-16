@@ -1,7 +1,7 @@
 import { animated, useTransition } from "@react-spring/web";
 import { useState } from "react";
 import { defenseTable, offensiveCoverage, suggestTypes } from "@/lib/analysis";
-import { artworkUrl, displayName, speciesIdOf, type Pokemon } from "@/lib/pokeapi";
+import { artworkUrl, pokemonName, speciesIdOf, type Pokemon } from "@/lib/pokeapi";
 import { usePrefersReducedMotion } from "@/lib/state";
 import { TYPE_INFO } from "@/lib/types";
 import { PokemonSearch } from "./search";
@@ -16,7 +16,7 @@ type Props = {
   onAdd: (id: number) => void;
   onRemove: (id: number) => void;
   onClear: () => void;
-  onOpen: (speciesId: number) => void;
+  onOpen: (speciesId: number, formId?: number) => void;
 };
 
 export function TeamTab({ ids, team, pending, onAdd, onRemove, onClear, onOpen }: Props) {
@@ -67,7 +67,7 @@ function Slots({
   team: Pokemon[];
   pending: number[];
   onRemove: (id: number) => void;
-  onOpen: (speciesId: number) => void;
+  onOpen: (speciesId: number, formId?: number) => void;
 }) {
   const reduce = usePrefersReducedMotion();
   const transitions = useTransition(team, {
@@ -84,7 +84,7 @@ function Slots({
     <ul className="mt-5 grid grid-cols-3 gap-2 sm:gap-3 lg:grid-cols-6">
       {transitions((style, p) => (
         <animated.li style={style} className="group relative">
-          <MemberCard pokemon={p} onRemove={() => onRemove(p.id)} onOpen={() => onOpen(speciesIdOf(p))} />
+          <MemberCard pokemon={p} onRemove={() => onRemove(p.id)} onOpen={() => onOpen(speciesIdOf(p), p.id)} />
         </animated.li>
       ))}
       {pending.map((id) => (
@@ -118,7 +118,7 @@ function MemberCard({ pokemon, onRemove, onOpen }: { pokemon: Pokemon; onRemove:
         loading="lazy"
         className="absolute top-[8%] left-1/2 w-[64%] -translate-x-1/2 drop-shadow-[0_8px_12px_rgb(0_0_0/0.18)] transition-transform duration-500 group-hover:scale-110 group-hover:-rotate-3 sm:top-2 sm:w-[78%]"
       />
-      <p className="relative w-full truncate font-display text-xs leading-tight font-bold sm:text-sm">{displayName(pokemon.name)}</p>
+      <p className="relative w-full truncate font-display text-xs leading-tight font-bold sm:text-sm">{pokemonName(pokemon.name)}</p>
       {/* Celular: bolinhas de cor; telas maiores: etiquetas com o nome do tipo. */}
       <div className="relative mt-1.5 flex justify-center gap-1 sm:hidden">
         {pokemon.types.map((t) => (
@@ -134,13 +134,13 @@ function MemberCard({ pokemon, onRemove, onOpen }: { pokemon: Pokemon; onRemove:
       <button
         type="button"
         onClick={onOpen}
-        aria-label={`Ver resumo de ${displayName(pokemon.name)}`}
+        aria-label={`Ver resumo de ${pokemonName(pokemon.name)}`}
         className="absolute inset-0 rounded-2xl"
       />
       <button
         type="button"
         onClick={onRemove}
-        aria-label={`Remover ${displayName(pokemon.name)} do time`}
+        aria-label={`Remover ${pokemonName(pokemon.name)} do time`}
         className="absolute top-1.5 right-1.5 grid size-6 place-items-center rounded-full bg-surface-solid/90 text-muted opacity-100 shadow transition hover:text-ink sm:top-2 sm:right-2 sm:size-7 sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100"
       >
         <svg viewBox="0 0 24 24" className="size-3.5" fill="none" stroke="currentColor" strokeWidth="2.4" aria-hidden="true">
@@ -284,7 +284,7 @@ function Analysis({ team }: { team: Pokemon[] }) {
                 </th>
                 {team.map((p) => (
                   <th key={p.id} scope="col" className="font-normal">
-                    <img src={artworkUrl(p.id)} alt={displayName(p.name)} title={displayName(p.name)} width={40} height={40} className="mx-auto size-10" loading="lazy" />
+                    <img src={artworkUrl(p.id)} alt={pokemonName(p.name)} title={pokemonName(p.name)} width={40} height={40} className="mx-auto size-10" loading="lazy" />
                   </th>
                 ))}
                 <th scope="col" className="text-xs font-medium text-muted">Fracos</th>
