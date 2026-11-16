@@ -11,6 +11,7 @@ import { MAX_TEAM, type Member } from "@/lib/team";
 import { useMoveInfos } from "@/lib/use-moves";
 import { TYPE_INFO, type TypeName } from "@/lib/types";
 import { MemberEditor } from "./member-editor";
+import { BossCheck } from "./boss-check";
 import { SpeedTiers } from "./speed";
 import { DamageCalc } from "./damage-calc";
 import { PokemonSearch } from "./search";
@@ -109,7 +110,16 @@ export function TeamTab({ members, team, pending, onAdd, onRemove, onClear, onUp
         />
       )}
 
-      {team.length > 0 ? <Analysis team={team} members={members} game={game} /> : <EmptyHint />}
+      {team.length > 0 ? (
+        <Analysis
+          team={team}
+          members={members}
+          game={game}
+          onSetAllLevels={(level) => members.forEach((m) => onUpdate(m.id, { level }))}
+        />
+      ) : (
+        <EmptyHint />
+      )}
     </div>
   );
 }
@@ -489,7 +499,17 @@ function multClass(v: number) {
   return "text-muted/50";
 }
 
-function Analysis({ team, members, game }: { team: Pokemon[]; members: Member[]; game: GameContext }) {
+function Analysis({
+  team,
+  members,
+  game,
+  onSetAllLevels,
+}: {
+  team: Pokemon[];
+  members: Member[];
+  game: GameContext;
+  onSetAllLevels: (level: number) => void;
+}) {
   const { gen } = game;
   // Tipos da época do jogo (ex.: Clefairy era Normal antes da 6ª geração).
   const typed = team.map((p) => ({ types: typesInGen(p, gen) }));
@@ -591,6 +611,8 @@ function Analysis({ team, members, game }: { team: Pokemon[]; members: Member[];
           )}
         </Card>
       </div>
+
+      <BossCheck team={team} members={members} game={game} onSetAllLevels={onSetAllLevels} />
 
       <SpeedTiers team={team} members={members} />
 
