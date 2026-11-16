@@ -147,6 +147,28 @@ body {
   }
 }
 
+/* Animação de clarão ao trocar entre forma Base e Mega/Primal (inspirada na Firma League). */
+.mega-in {
+  animation: mega-in 0.52s cubic-bezier(0.16, 1, 0.3, 1);
+}
+@keyframes mega-in {
+  0% {
+    opacity: 0;
+    transform: scale(0.86);
+    filter: brightness(2.2) saturate(0);
+  }
+}
+.mega-out {
+  animation: mega-out 0.52s cubic-bezier(0.16, 1, 0.3, 1);
+}
+@keyframes mega-out {
+  0% {
+    opacity: 0;
+    transform: scale(1.12);
+    filter: brightness(2.2) saturate(0);
+  }
+}
+
 /* Barra de rolagem fina nas tabelas. */
 .scroll-x {
   scrollbar-width: thin;
