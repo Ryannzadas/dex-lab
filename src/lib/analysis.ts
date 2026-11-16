@@ -24,8 +24,13 @@ export function defenseTable(team: Pokemon[]): DefenseRow[] {
 
 /** Tipos que algum golpe do mesmo tipo do time (STAB) acerta como super efetivo. */
 export function offensiveCoverage(team: Pokemon[]) {
-  const attackTypes = new Set(team.flatMap((p) => p.types));
-  const covered = TYPES.filter((def) => [...attackTypes].some((atk) => effectiveness(atk, def) > 1));
+  return coverageFromTypes(team.flatMap((p) => p.types));
+}
+
+/** Quais tipos de defesa uma lista de tipos de ataque acerta como super efetivo. */
+export function coverageFromTypes(attackTypes: TypeName[]) {
+  const unique = [...new Set(attackTypes)];
+  const covered = TYPES.filter((def) => unique.some((atk) => effectiveness(atk, def) > 1));
   const uncovered = TYPES.filter((def) => !covered.includes(def));
   return { covered, uncovered };
 }

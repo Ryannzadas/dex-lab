@@ -38,7 +38,7 @@ export function useIdList(param: string, max: number) {
     const url = new URL(window.location.href);
     if (ids.length) url.searchParams.set(param, ids.join(","));
     else url.searchParams.delete(param);
-    window.history.replaceState(null, "", url);
+    window.history.replaceState(window.history.state, "", url);
   }, [ids, param, storageKey]);
 
   const add = useCallback(

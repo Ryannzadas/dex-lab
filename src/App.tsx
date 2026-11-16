@@ -6,6 +6,7 @@ import { SummaryView } from "@/components/summary";
 import { TeamTab } from "@/components/team";
 import { ArrowIcon } from "@/components/ui";
 import { useIdList, usePrefersReducedMotion, useTheme } from "@/lib/state";
+import { useTeam } from "@/lib/team";
 import type { TypeName } from "@/lib/types";
 import { usePokemons } from "@/lib/use-pokemon";
 
@@ -30,7 +31,7 @@ export default function App() {
   const [summaryId, setSummaryId] = useState<number | null>(readSummary);
   const [formId, setFormId] = useState<number | null>(readForm);
   const [summaryTypes, setSummaryTypes] = useState<TypeName[]>([]);
-  const team = useIdList("time", 6);
+  const team = useTeam();
   const compare = useIdList("comparar", 4);
   const teamData = usePokemons(team.ids);
   const compareData = usePokemons(compare.ids);
@@ -109,12 +110,13 @@ export default function App() {
             <div role="tabpanel" id={`painel-${tab}`} aria-labelledby={`aba-${tab}`} className="scroll-mt-24">
               {tab === "time" ? (
                 <TeamTab
-                  ids={team.ids}
+                  members={team.members}
                   team={teamData.list}
                   pending={teamData.pending}
                   onAdd={team.add}
                   onRemove={team.remove}
                   onClear={team.clear}
+                  onUpdate={team.update}
                   onOpen={openSummary}
                 />
               ) : (

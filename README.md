@@ -13,6 +13,17 @@ Você escolhe até seis Pokémon e o app mostra:
 - a **cobertura de ataque**, com quais tipos os golpes do mesmo tipo do time acertam super efetivo;
 - uma **sugestão** de tipo para o próximo membro.
 
+#### Configurar cada membro
+
+Clique num membro do time para abrir o editor dele (inspirado no montador da Firma League). Dá pra definir:
+
+- apelido, nível, habilidade, item, natureza (em português, com o status que sobe e o que desce) e Tipo Tera;
+- shiny;
+- **4 golpes**, só entre os que o Pokémon aprende, mostrando tipo, categoria, poder e precisão;
+- no **modo avançado**, EVs (até 252 por status, 510 no total) e IVs, com os **status finais** calculados pela fórmula oficial.
+
+Com golpes escolhidos, a cobertura da análise passa a usar os **golpes de dano** do time e avisa quem ainda está sem golpe. A configuração inteira vai junto no link de compartilhar.
+
 ### Aba Comparar
 
 Você coloca de dois a quatro Pokémon lado a lado e compara:
