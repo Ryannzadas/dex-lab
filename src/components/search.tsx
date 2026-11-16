@@ -45,8 +45,8 @@ export function PokemonSearch({ onPick, disabled, exclude = [], placeholder, lab
         const sa = a.name.startsWith(first);
         const sb = b.name.startsWith(first);
         if (sa !== sb) return sa ? -1 : 1;
-        // Quem começa com a busca: forma padrão antes das regionais/Mega ("vulpix" antes de "vulpix-alola").
-        if (sa) return a.name.length - b.name.length || a.id - b.id;
+        // Quem começa com a busca: ordem alfabética, que já deixa "vulpix" antes de "vulpix-alola".
+        if (sa) return a.name.localeCompare(b.name);
         return a.id - b.id;
       })
       .slice(0, MAX_RESULTS);

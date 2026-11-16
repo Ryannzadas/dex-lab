@@ -33,7 +33,8 @@ export function CompareTab({ ids, list, pending, onAdd, onRemove, onOpen }: Prop
 
   return (
     <div className="grid grid-cols-1 gap-6">
-      <Card>
+      {/* Camada acima dos cards de baixo, para a lista da busca não ficar escondida atrás deles. */}
+      <Card className="relative z-20">
         <SectionHeading kicker={`Comparar · ${ids.length}/${MAX}`} title="Lado a lado">
           Coloque de dois a quatro Pokémon pra comparar status base, habilidades e evolução. O maior valor de cada status fica
           destacado.

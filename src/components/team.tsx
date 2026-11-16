@@ -22,7 +22,8 @@ type Props = {
 export function TeamTab({ ids, team, pending, onAdd, onRemove, onClear, onOpen }: Props) {
   return (
     <div className="grid grid-cols-1 gap-6">
-      <Card>
+      {/* Camada acima dos cards de baixo, para a lista da busca não ficar escondida atrás deles. */}
+      <Card className="relative z-20">
         <div className="mb-5 flex flex-wrap items-end justify-between gap-4">
           <SectionHeading kicker={`Time · ${ids.length}/${MAX}`} title="Escolha até seis">
             Busque pelo nome em inglês ou pelo número da Pokédex.
