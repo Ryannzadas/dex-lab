@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { GAMES, gameById, type Game } from "@/lib/games";
-import { artworkUrl } from "@/lib/pokeapi";
+import { artworkUrl, cryMp3Url, cryUrl, getPokemonList } from "@/lib/pokeapi";
 import type { TeamsApi } from "@/lib/team";
 import { ArrowIcon } from "./ui";
 
@@ -40,15 +40,15 @@ export function Home({
   );
 
   return (
-    <div className="grid grid-cols-1 gap-14 pt-10 pb-6 sm:pt-14">
+    <div className="grid grid-cols-1 gap-12 pt-8 pb-6 sm:gap-14 sm:pt-14">
       {/* Abertura */}
-      <section className="grid items-center gap-10 lg:grid-cols-[1fr_1.1fr]">
-        <div>
+      <section className="grid grid-cols-1 items-center gap-8 sm:gap-10 lg:grid-cols-[1fr_1.1fr]">
+        <div className="min-w-0">
           <p className="font-mono text-[11px] tracking-[0.18em] text-muted uppercase">Dex Lab · montador de times</p>
-          <h1 className="mt-3 font-display text-[2.9rem] leading-[0.95] font-extrabold tracking-[-0.045em] sm:text-6xl lg:text-7xl">
+          <h1 className="mt-3 font-display text-[2.35rem] leading-[0.98] font-extrabold tracking-[-0.045em] sm:text-6xl sm:leading-[0.95] lg:text-7xl">
             Pra qual jogo é o time de hoje?
           </h1>
-          <p className="braces mt-6 max-w-md text-lg leading-snug">
+          <p className="braces mt-5 max-w-md text-base leading-snug sm:mt-6 sm:text-lg">
             Escolha o jogo e o app só deixa entrar quem existe nele, com os golpes e as regras daquela época.
           </p>
           <div className="mt-7 flex flex-wrap gap-3">
@@ -85,7 +85,7 @@ export function Home({
       </section>
 
       {/* Escolher o jogo */}
-      <section id="jogos" className="scroll-mt-24">
+      <section id="jogos" className="min-w-0 scroll-mt-24">
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
             <p className="font-mono text-[11px] tracking-[0.18em] text-muted uppercase">Novo time</p>
@@ -203,21 +203,80 @@ function GameTile({ game, onPick }: { game: Game; onPick: () => void }) {
   );
 }
 
-/** Seis cards em arco com perspectiva (inspirado no hero do horizonx.so). Estático, sem carrossel. */
+/** Seis cards em arco (inspirado no hero do horizonx.so), com som ao passar o mouse ou tocar. */
 function TeamArc({ ids, shiny }: { ids: number[]; shiny: boolean[] }) {
   const n = ids.length;
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const namesRef = useRef<Record<number, string>>({
+    1: "bulbasaur",
+    4: "charmander",
+    7: "squirtle",
+    25: "pikachu",
+    133: "eevee",
+    151: "mew",
+  });
+  const [playingIdx, setPlayingIdx] = useState<number | null>(null);
+  const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
+
+  useEffect(() => {
+    getPokemonList()
+      .then((list) => {
+        for (const p of list) namesRef.current[p.id] = p.name;
+      })
+      .catch(() => {});
+    return () => {
+      audioRef.current?.pause();
+      audioRef.current = null;
+    };
+  }, []);
+
+  const playCry = (id: number, idx: number) => {
+    try {
+      audioRef.current?.pause();
+      const canOgg = typeof Audio !== "undefined" && new Audio().canPlayType("audio/ogg") !== "";
+      const name = namesRef.current[id];
+      const src = !canOgg && name ? cryMp3Url(name) : cryUrl(id);
+      const audio = new Audio(src);
+      audio.volume = 0.2; // volume suave como no botão de grito do resumo
+      audioRef.current = audio;
+      setPlayingIdx(idx);
+      audio.onended = () => setPlayingIdx((cur) => (cur === idx ? null : cur));
+      audio.onerror = () => setPlayingIdx((cur) => (cur === idx ? null : cur));
+      audio.play().catch(() => {
+        setPlayingIdx((cur) => (cur === idx ? null : cur));
+      });
+    } catch {
+      setPlayingIdx(null);
+    }
+  };
+
   return (
-    <div className="relative mx-auto h-64 w-full max-w-xl [perspective:1100px] sm:h-80" aria-hidden="true">
+    <div className="relative mx-auto h-48 w-full max-w-xl select-none [--arc-x:205%] sm:h-80 sm:[--arc-x:265%]">
       {ids.map((id, i) => {
-        const t = n === 1 ? 0 : i / (n - 1) - 0.5; // -0,5 … 0,5
+        // Passo fixo por carta: com 2 ou 3 Pokémon eles ficam juntos no centro em vez de nas pontas.
+        const t = (i - (n - 1) / 2) / 5; // -0,5 … 0,5 quando há 6
+        const active = hoveredIdx === i || playingIdx === i;
+        const lift = active ? -14 : 0;
+        const scale = (1 - Math.abs(t) * 0.1) * (active ? 1.1 : 1);
         return (
-          <div
+          <button
             key={`${id}-${i}`}
-            className="absolute top-1/2 left-1/2 h-40 w-28 rounded-2xl border border-line bg-surface-solid shadow-xl transition-transform duration-500 hover:z-10 hover:!scale-110 sm:h-52 sm:w-36"
+            type="button"
+            onMouseEnter={() => {
+              setHoveredIdx(i);
+              playCry(id, i);
+            }}
+            onMouseLeave={() => setHoveredIdx((cur) => (cur === i ? null : cur))}
+            onFocus={() => setHoveredIdx(i)}
+            onBlur={() => setHoveredIdx((cur) => (cur === i ? null : cur))}
+            onClick={() => playCry(id, i)}
+            aria-label={`Ouvir o som do Pokémon #${id}`}
+            className={`group absolute top-1/2 left-1/2 h-32 w-22 cursor-pointer rounded-2xl border bg-surface-solid shadow-xl transition-[transform,border-color,box-shadow] duration-300 sm:h-52 sm:w-36 sm:rounded-3xl ${
+              active ? "border-ink shadow-2xl" : "border-line"
+            }`}
             style={{
-              // Espalha em arco: as das pontas ficam mais longe, mais para trás e viradas para o centro.
-              transform: `translate(-50%, -50%) translateX(${t * 330}%) translateZ(${-Math.abs(t) * 220}px) rotateY(${t * -55}deg)`,
-              zIndex: 10 - Math.round(Math.abs(t) * 10),
+              transform: `translate(-50%, -50%) translateX(calc(${t} * var(--arc-x))) translateY(${Math.abs(t) * 26 + lift}px) rotate(${t * 18}deg) scale(${scale})`,
+              zIndex: active ? 30 : 10 - Math.round(Math.abs(t) * 10),
             }}
           >
             <img
@@ -225,9 +284,23 @@ function TeamArc({ ids, shiny }: { ids: number[]; shiny: boolean[] }) {
               alt=""
               width={140}
               height={140}
-              className="absolute inset-x-0 top-1/2 mx-auto w-[86%] -translate-y-1/2 drop-shadow-[0_10px_14px_rgb(0_0_0/0.2)]"
+              draggable={false}
+              className="pointer-events-none absolute inset-x-0 top-1/2 mx-auto w-[84%] -translate-y-1/2 drop-shadow-[0_10px_14px_rgb(0_0_0/0.2)]"
             />
-          </div>
+            <span
+              aria-hidden="true"
+              className={`pointer-events-none absolute top-2 right-2 grid size-6 place-items-center rounded-full border transition-opacity sm:top-2.5 sm:right-2.5 sm:size-7 ${
+                playingIdx === i
+                  ? "border-ink bg-ink text-bg opacity-100"
+                  : "border-line bg-surface-solid/90 text-muted opacity-0 group-hover:opacity-100"
+              }`}
+            >
+              <svg viewBox="0 0 24 24" className="size-3.5" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M11 5 6 9H3v6h3l5 4V5Z" strokeLinejoin="round" />
+                <path d="M15.5 8.5a5 5 0 0 1 0 7" strokeLinecap="round" />
+              </svg>
+            </span>
+          </button>
         );
       })}
     </div>

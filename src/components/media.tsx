@@ -1,9 +1,9 @@
 import { animated, useSpring } from "@react-spring/web";
 import { useEffect, useRef, useState } from "react";
-import { artworkUrl, pokemonName, type Pokemon } from "@/lib/pokeapi";
+import { artworkUrl, cryMp3Url, pokemonName, type Pokemon } from "@/lib/pokeapi";
 import { usePrefersReducedMotion } from "@/lib/state";
 
-/** Toca o grito do Pokémon. Os arquivos são .ogg; se o navegador não tocar, avisa. */
+/** Toca o grito do Pokémon (.ogg da PokéAPI, com queda para .mp3 no Safari/iPhone). */
 export function CryButton({ pokemon }: { pokemon: Pokemon }) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [state, setState] = useState<"idle" | "playing" | "error">("idle");
@@ -21,7 +21,9 @@ export function CryButton({ pokemon }: { pokemon: Pokemon }) {
   const play = async () => {
     try {
       audioRef.current?.pause();
-      const audio = new Audio(pokemon.cry!);
+      const canOgg = typeof Audio !== "undefined" && new Audio().canPlayType("audio/ogg") !== "";
+      const src = canOgg && pokemon.cry ? pokemon.cry : cryMp3Url(pokemon.name);
+      const audio = new Audio(src);
       audio.volume = 0.2; // os gritos vêm bem altos nos arquivos originais
       audioRef.current = audio;
       audio.onended = () => setState("idle");

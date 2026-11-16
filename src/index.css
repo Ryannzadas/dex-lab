@@ -43,6 +43,7 @@ html {
   color: var(--ink);
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
+  overflow-x: clip;
   transition:
     background-color 0.4s ease,
     color 0.4s ease;
@@ -50,6 +51,7 @@ html {
 
 body {
   min-height: 100dvh;
+  overflow-x: clip;
 }
 
 @layer base {

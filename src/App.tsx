@@ -263,19 +263,19 @@ function Toolbar({
         scrolled ? "border-b border-line bg-bg/70 backdrop-blur-xl" : "border-b border-transparent"
       }`}
     >
-      <div className="mx-auto flex max-w-6xl items-center justify-between gap-3">
+      <div className="mx-auto flex max-w-6xl items-center justify-between gap-2 sm:gap-3">
         <button
           type="button"
           onClick={() => setTab("inicio")}
-          className="flex items-center gap-2 rounded-2xl border border-line bg-surface p-1 shadow-sm backdrop-blur-xl sm:pr-3.5"
+          className="flex shrink-0 items-center gap-2 rounded-2xl border border-line bg-surface p-1 shadow-sm backdrop-blur-xl sm:pr-3.5"
           aria-label="Dex Lab, ir para o início"
         >
-          <img src="/favicon.svg" alt="" width={36} height={36} className="size-9" />
+          <img src="/favicon.svg" alt="" width={36} height={36} className="size-8 sm:size-9" />
           <span className="hidden font-display text-lg font-bold tracking-tight sm:inline">Dex Lab</span>
         </button>
 
-        <nav className="flex items-center gap-1 rounded-2xl border border-line bg-surface p-1 shadow-sm backdrop-blur-xl">
-          <div role="tablist" aria-label="Ferramentas" className="flex gap-1">
+        <nav className="flex min-w-0 items-center gap-0.5 rounded-2xl border border-line bg-surface p-1 shadow-sm backdrop-blur-xl sm:gap-1">
+          <div role="tablist" aria-label="Ferramentas" className="flex gap-0.5 sm:gap-1">
             {tabs.map((t) => (
               <button
                 key={t.id}
@@ -287,23 +287,23 @@ function Toolbar({
                 aria-label={t.label}
                 title={t.label}
                 onClick={() => setTab(t.id)}
-                className={`flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium transition-colors ${
+                className={`flex items-center gap-1.5 rounded-xl px-2.5 py-2 text-xs font-medium transition-colors sm:gap-2 sm:px-3 sm:text-sm ${
                   tab === t.id ? "bg-ink text-bg" : "text-muted hover:bg-line/60 hover:text-ink"
                 }`}
               >
                 {t.icon}
-                {/* No celular só a aba aberta mostra o nome, para as três caberem. */}
-                <span className={tab === t.id ? "" : "hidden sm:inline"}>{t.label}</span>
+                {/* No celular só a aba aberta mostra o nome, para todas caberem sem cortar. */}
+                <span className={tab === t.id ? "truncate" : "hidden sm:inline"}>{t.label}</span>
               </button>
             ))}
           </div>
-          <span className="mx-1 h-5 w-px bg-line" aria-hidden="true" />
+          <span className="mx-0.5 h-5 w-px shrink-0 bg-line sm:mx-1" aria-hidden="true" />
           <button
             type="button"
             onClick={toggleTheme}
             aria-label={`Tema: ${THEME_LABEL[themeMode]}. Trocar tema`}
             title={`Tema: ${THEME_LABEL[themeMode]} (clique para trocar)`}
-            className="grid size-9 place-items-center rounded-xl text-muted transition-colors hover:bg-line/60 hover:text-ink"
+            className="grid size-8 shrink-0 place-items-center rounded-xl text-muted transition-colors hover:bg-line/60 hover:text-ink sm:size-9"
           >
             {themeMode === "claro" && (
               <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">

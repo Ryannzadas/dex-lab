@@ -55,6 +55,16 @@ export function spriteUrl(id: number) {
   return `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${id}.png`;
 }
 
+export function cryUrl(id: number) {
+  return `https://raw.githubusercontent.com/PokeAPI/cries/main/cries/pokemon/latest/${id}.ogg`;
+}
+
+/** Grito em MP3 (Showdown), usado como alternativa no iPhone/Safari onde .ogg não toca. */
+export function cryMp3Url(name: string) {
+  const base = name.replace(FORM_SUFFIX, "").replace(/[^a-z0-9]/gi, "").toLowerCase();
+  return `https://play.pokemonshowdown.com/audio/cries/${base}.mp3`;
+}
+
 /** "mr-mime" → "Mr Mime". */
 export function displayName(name: string) {
   return name
