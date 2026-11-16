@@ -160,7 +160,7 @@ export function MemberEditor({ member, pokemon, onChange, onRemove, onOpenSummar
         </div>
       </div>
 
-      <fieldset className="mt-6">
+      <fieldset className="mt-6 min-w-0">
         <legend className={label}>Golpes (até 4, só os que ele aprende)</legend>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           {moveSlots.map((move, i) => {

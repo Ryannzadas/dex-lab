@@ -40,6 +40,16 @@ Você coloca de dois a quatro Pokémon lado a lado e compara:
 - habilidades, incluindo as ocultas;
 - altura, peso e cadeia de evolução.
 
+### Aba Pokédex
+
+Todos os 1.025 Pokémon numa grade, com:
+
+- **Filtros:** busca por nome ou número, por **região** (Kanto a Paldea) e por **tipo**. Dá pra combinar dois tipos, como Fogo + Voador.
+- **Formas:** opção para mostrar também as formas regionais, Mega e Gigantamax.
+- **Atalhos:** clicar num card abre o resumo, e o botão **+** coloca o Pokémon direto no time aberto.
+
+Os filtros ficam no link (`?aba=pokedex&regiao=kanto&tipo=fire`). Os tipos de todos os Pokémon vêm de 18 pedidos à PokéAPI (um por tipo) e ficam guardados no navegador por 7 dias.
+
 ### Resumo de cada Pokémon
 
 Clique num Pokémon do time ou no nome dele na comparação para abrir o resumo. O resumo traz:

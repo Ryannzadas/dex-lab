@@ -5,16 +5,18 @@ import { CompareTab } from "@/components/compare";
 import { SummaryView } from "@/components/summary";
 import { TeamTab } from "@/components/team";
 import { TeamManager } from "@/components/team-manager";
+import { Pokedex } from "@/components/pokedex";
 import { ArrowIcon } from "@/components/ui";
 import { useIdList, usePrefersReducedMotion, useTheme } from "@/lib/state";
 import { useTeams } from "@/lib/team";
 import type { TypeName } from "@/lib/types";
 import { usePokemons } from "@/lib/use-pokemon";
 
-type Tab = "time" | "comparar";
+type Tab = "time" | "comparar" | "pokedex";
 
 function readTab(): Tab {
-  return new URLSearchParams(window.location.search).get("aba") === "comparar" ? "comparar" : "time";
+  const aba = new URLSearchParams(window.location.search).get("aba");
+  return aba === "comparar" || aba === "pokedex" ? aba : "time";
 }
 
 function readSummary(): number | null {
@@ -32,6 +34,7 @@ export default function App() {
   const [summaryId, setSummaryId] = useState<number | null>(readSummary);
   const [formId, setFormId] = useState<number | null>(readForm);
   const [summaryTypes, setSummaryTypes] = useState<TypeName[]>([]);
+  const [dexTypes, setDexTypes] = useState<TypeName[]>([]);
   const team = useTeams();
   const compare = useIdList("comparar", 4);
   const teamData = usePokemons(team.ids);
@@ -40,8 +43,10 @@ export default function App() {
 
   useEffect(() => {
     const url = new URL(window.location.href);
-    if (tab === "comparar") url.searchParams.set("aba", "comparar");
+    if (tab !== "time") url.searchParams.set("aba", tab);
     else url.searchParams.delete("aba");
+    // Filtros da Pokédex só fazem sentido na aba dela.
+    if (tab !== "pokedex") ["regiao", "tipo", "formas"].forEach((k) => url.searchParams.delete(k));
     window.history.replaceState(window.history.state, "", url);
   }, [tab]);
 
@@ -84,7 +89,11 @@ export default function App() {
   };
 
   const activeTypes =
-    summaryId !== null ? summaryTypes : (tab === "time" ? teamData.list : compareData.list).flatMap((p) => p.types);
+    summaryId !== null
+      ? summaryTypes
+      : tab === "pokedex"
+        ? dexTypes
+        : (tab === "time" ? teamData.list : compareData.list).flatMap((p) => p.types);
 
   return (
     <>
@@ -124,6 +133,14 @@ export default function App() {
                   onOpen={openSummary}
                 />
                 </div>
+              ) : tab === "pokedex" ? (
+                <Pokedex
+                  onOpen={openSummary}
+                  onAddToTeam={team.add}
+                  teamIds={team.ids}
+                  teamFull={team.full}
+                  onTypes={setDexTypes}
+                />
               ) : (
                 <CompareTab
                   ids={compare.ids}
@@ -134,7 +151,7 @@ export default function App() {
                   onOpen={openSummary}
                 />
               )}
-              {(tab === "time" ? teamData.failed : compareData.failed).length > 0 && (
+              {tab !== "pokedex" && (tab === "time" ? teamData.failed : compareData.failed).length > 0 && (
                 <p className="mt-4 text-center text-sm text-red-600 dark:text-red-400" role="alert">
                   Alguns Pokémon não carregaram. Confira a conexão e recarregue a página.
                 </p>
@@ -182,6 +199,17 @@ function Toolbar({
         </svg>
       ),
     },
+    {
+      id: "pokedex",
+      label: "Pokédex",
+      icon: (
+        <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+          <rect x="4" y="3" width="16" height="18" rx="2.5" />
+          <path d="M4 9h16M9 14h6M9 17h4" strokeLinecap="round" />
+          <circle cx="8" cy="6" r="1" fill="currentColor" />
+        </svg>
+      ),
+    },
   ];
 
   return (
@@ -206,13 +234,16 @@ function Toolbar({
                 type="button"
                 aria-selected={tab === t.id}
                 aria-controls={`painel-${t.id}`}
+                aria-label={t.label}
+                title={t.label}
                 onClick={() => setTab(t.id)}
                 className={`flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium transition-colors ${
                   tab === t.id ? "bg-ink text-bg" : "text-muted hover:bg-line/60 hover:text-ink"
                 }`}
               >
                 {t.icon}
-                {t.label}
+                {/* No celular só a aba aberta mostra o nome, para as três caberem. */}
+                <span className={tab === t.id ? "" : "hidden sm:inline"}>{t.label}</span>
               </button>
             ))}
           </div>
@@ -273,7 +304,7 @@ function Hero() {
       </h1>
       <div className="mt-8 flex flex-wrap items-center gap-x-8 gap-y-5">
         <p className="braces max-w-md text-lg leading-snug">
-          Escolha até seis Pokémon e veja fraquezas, cobertura de tipos e o que falta no time. Ou compare status lado a lado.
+          Escolha até seis Pokémon e veja fraquezas, cobertura de tipos e o que falta no time. Compare status lado a lado ou explore a Pokédex inteira.
         </p>
         <a href="#painel" className="pill" onClick={start}>
           Começar
