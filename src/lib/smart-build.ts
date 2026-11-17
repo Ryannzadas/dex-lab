@@ -69,7 +69,7 @@ const FORM_SIGNATURE: Record<string, string> = {
  * Tudo o que o Pokémon pode saber neste jogo: os golpes dele, os das pré-evoluções (golpes de ovo e
  * de nível que só a forma anterior aprende) e os da forma base. A PokéAPI lista só os da própria forma.
  */
-async function fullLearnable(pokemon: Pokemon, learned: LearnedMove[], versionGroup: string | null): Promise<Set<string>> {
+export async function fullLearnable(pokemon: Pokemon, learned: LearnedMove[], versionGroup: string | null): Promise<Set<string>> {
   const names = new Set(learned.map((m) => m.name));
   const extraIds = await preEvolutionIds(pokemon).catch(() => [] as number[]);
   if (pokemon.id > 1025) extraIds.push(speciesIdOf(pokemon));

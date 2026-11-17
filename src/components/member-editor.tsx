@@ -1,6 +1,7 @@
 import { useEffect, useId, useState } from "react";
 import type { BuildStyle } from "@/lib/auto-build";
 import { smartBuild, type SmartBuild } from "@/lib/smart-build";
+import { ClaudeBuild } from "./claude-build";
 import { CATEGORY_PT, COMMON_ITEMS, TERA_TYPES } from "@/lib/moves";
 import { EV_MAX, EV_TOTAL, finalStats, IV_MAX, NATURES, SHORT_STAT } from "@/lib/natures";
 import { artworkUrl, displayName, getHoldableItems, pokemonName, type Pokemon, type StatKey } from "@/lib/pokeapi";
@@ -186,6 +187,8 @@ export function MemberEditor({ member, pokemon, onChange, onRemove, onOpenSummar
         </div>
         {lastBuild && <BuildExplanation build={lastBuild} onClose={() => setLastBuild(null)} />}
       </div>
+
+      <ClaudeBuild member={member} pokemon={pokemon} game={game} learned={learnedEntries} teammates={teammates} onChange={onChange} />
 
       <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <div>
