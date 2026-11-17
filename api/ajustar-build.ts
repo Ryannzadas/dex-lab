@@ -1,24 +1,20 @@
-import Anthropic from "@anthropic-ai/sdk";
-import { betaZodOutputFormat } from "@anthropic-ai/sdk/helpers/beta/zod";
 import type { AiBuildRequest, AiBuildResponse } from "../src/lib/ai-build-types.js";
-import { AiOutputSchema, RequestSchema, SYSTEM_PROMPT, sanitize, userMessage } from "./_build-ai.js";
+import { AI_OUTPUT_JSON_SCHEMA, AiOutputSchema, RequestSchema, SYSTEM_PROMPT, sanitize, userMessage } from "./_build-ai.js";
 
 /**
- * POST /api/ajustar-build — o Claude explica ou ajusta a build de um Pokémon.
- * A chave fica só na Vercel (ANTHROPIC_API_KEY). Como o site é público, há limite
- * de perguntas por pessoa e por dia; o teto de gasto definitivo é o limite mensal
- * configurado no console da Anthropic.
+ * POST /api/ajustar-build — a IA explica ou ajusta a build de um Pokémon.
+ * Usa o plano gratuito do Groq (modelo aberto gpt-oss-120b). A chave fica só na Vercel (GROQ_API_KEY).
+ * Como o site é público, há limite de perguntas por pessoa e por dia, além do limite da própria conta do Groq.
  */
 
-const MODEL = "claude-opus-5-5";
+const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
+const MODEL = process.env.IA_MODELO ?? "openai/gpt-oss-120b";
 const PER_PERSON = Number(process.env.IA_LIMITE_POR_PESSOA ?? 10);
-const PER_DAY = Number(process.env.IA_LIMITE_DIARIO ?? 200);
+const PER_DAY = Number(process.env.IA_LIMITE_DIARIO ?? 500);
 
-// Contadores em memória: valem enquanto a instância da função estiver viva (proteção contra abuso, não contabilidade exata).
+// Contadores em memória: valem enquanto a instância da função estiver viva (freio contra abuso, não contabilidade exata).
 const perPerson = new Map<string, { day: string; n: number }>();
 let perDay = { day: "", n: 0 };
-
-const client = new Anthropic();
 
 function reply(body: AiBuildResponse, status = 200) {
   return Response.json(body, { status, headers: { "cache-control": "no-store" } });
@@ -26,10 +22,14 @@ function reply(body: AiBuildResponse, status = 200) {
 
 const today = () => new Date().toISOString().slice(0, 10);
 
+type GroqResponse = {
+  choices?: { message?: { content?: string | null }; finish_reason?: string }[];
+  error?: { message?: string };
+};
+
 export async function POST(request: Request): Promise<Response> {
-  if (!process.env.ANTHROPIC_API_KEY) {
-    return reply({ ok: false, erro: "O assistente ainda não foi configurado neste site." }, 503);
-  }
+  const key = process.env.GROQ_API_KEY;
+  if (!key) return reply({ ok: false, erro: "O assistente ainda não foi configurado neste site." }, 503);
 
   // Só aceita chamadas do próprio site.
   const origin = request.headers.get("origin");
@@ -62,43 +62,56 @@ export async function POST(request: Request): Promise<Response> {
   perPerson.set(ip, { day, n: used + 1 });
   perDay.n += 1;
   if (perPerson.size > 5000) perPerson.clear();
+  const refund = () => {
+    perPerson.set(ip, { day, n: used });
+    perDay.n -= 1;
+  };
 
   try {
-    const message = await client.beta.messages.parse({
-      model: MODEL,
-      max_tokens: 16000,
-      betas: ["server-side-fallback-2026-07-01"],
-      // Se o modelo recusar por engano (classificador de segurança), a API tenta outro modelo.
-      fallbacks: "default",
-      system: SYSTEM_PROMPT,
-      output_config: { effort: "medium", format: betaZodOutputFormat(AiOutputSchema) },
-      messages: [{ role: "user", content: userMessage(req) }],
+    const res = await fetch(GROQ_URL, {
+      method: "POST",
+      headers: { authorization: `Bearer ${key}`, "content-type": "application/json" },
+      signal: AbortSignal.timeout(45_000),
+      body: JSON.stringify({
+        model: MODEL,
+        messages: [
+          { role: "system", content: SYSTEM_PROMPT },
+          { role: "user", content: userMessage(req) },
+        ],
+        // Saída estruturada estrita: a resposta sempre segue o formato da build.
+        response_format: { type: "json_schema", json_schema: { name: "build", strict: true, schema: AI_OUTPUT_JSON_SCHEMA } },
+        reasoning_effort: "medium",
+        include_reasoning: false,
+        max_completion_tokens: 6000,
+      }),
     });
 
-    if (message.stop_reason === "refusal") {
-      return reply({ ok: false, erro: "O assistente não conseguiu responder esse pedido. Tente escrever de outro jeito." }, 422);
+    if (!res.ok) {
+      refund();
+      const detail = (await res.json().catch(() => null)) as GroqResponse | null;
+      console.error("Groq", res.status, detail?.error?.message);
+      if (res.status === 429) return reply({ ok: false, erro: "Muita gente usando agora. Tente em alguns segundos." }, 429);
+      if (res.status === 401 || res.status === 403) return reply({ ok: false, erro: "O assistente está indisponível no momento." }, 503);
+      return reply({ ok: false, erro: "O assistente está indisponível no momento." }, 502);
     }
-    const out = message.parsed_output;
-    if (!out) return reply({ ok: false, erro: "A resposta veio incompleta. Tente de novo." }, 502);
+
+    const data = (await res.json()) as GroqResponse;
+    const content = data.choices?.[0]?.message?.content;
+    let out;
+    try {
+      out = AiOutputSchema.parse(JSON.parse(content ?? ""));
+    } catch {
+      refund();
+      console.error("Resposta fora do formato", data.choices?.[0]?.finish_reason);
+      return reply({ ok: false, erro: "A resposta veio incompleta. Tente de novo." }, 502);
+    }
 
     const { patch, avisos } = sanitize(req, out);
     return reply({ ok: true, resposta: out.resposta, alterou: out.alterou_build, patch, avisos, restantes: PER_PERSON - used - 1 });
   } catch (error) {
-    // Pergunta que falhou não conta no limite da pessoa.
-    perPerson.set(ip, { day, n: used });
-    perDay.n -= 1;
-    if (error instanceof Anthropic.RateLimitError) {
-      return reply({ ok: false, erro: "Muita gente usando agora. Tente em alguns segundos." }, 429);
-    }
-    if (error instanceof Anthropic.AuthenticationError || error instanceof Anthropic.PermissionDeniedError) {
-      console.error("Chave da Anthropic inválida ou sem permissão", error.status);
-      return reply({ ok: false, erro: "O assistente está indisponível no momento." }, 503);
-    }
-    if (error instanceof Anthropic.APIError) {
-      console.error("Erro da API da Anthropic", error.status, error.message);
-      return reply({ ok: false, erro: "O assistente está indisponível no momento." }, 502);
-    }
+    refund();
     console.error(error);
-    return reply({ ok: false, erro: "Algo deu errado. Tente de novo." }, 500);
+    const timeout = error instanceof DOMException && error.name === "TimeoutError";
+    return reply({ ok: false, erro: timeout ? "A IA demorou demais para responder. Tente de novo." : "Algo deu errado. Tente de novo." }, 504);
   }
 }

@@ -62,7 +62,37 @@ export const AiOutputSchema = z.object({
 });
 export type AiOutput = z.infer<typeof AiOutputSchema>;
 
-export const SYSTEM_PROMPT = `You are the build assistant inside Dex Lab, a Pokémon team builder. The player is building a team for a specific game and asks you, in Brazilian Portuguese, to explain or adjust the build of one Pokémon.
+/** O mesmo formato em JSON Schema para a saída estruturada estrita do Groq (tudo obrigatório, objetos fechados). */
+const ev = { type: "integer" };
+export const AI_OUTPUT_JSON_SCHEMA = {
+  type: "object",
+  properties: {
+    resposta: { type: "string", description: "Resposta ao jogador em português do Brasil, curta, explicando o que mudou e por quê." },
+    alterou_build: { type: "boolean", description: "true se a build abaixo é diferente da atual." },
+    build: {
+      type: "object",
+      properties: {
+        moves: { type: "array", items: { type: "string" }, description: "Até 4 ids de golpes, exatamente como na lista learnable." },
+        item: { type: "string" },
+        nature: { type: "string" },
+        ability: { type: ["string", "null"] },
+        tera: { type: ["string", "null"] },
+        evs: {
+          type: "object",
+          properties: { hp: ev, attack: ev, defense: ev, "special-attack": ev, "special-defense": ev, speed: ev },
+          required: ["hp", "attack", "defense", "special-attack", "special-defense", "speed"],
+          additionalProperties: false,
+        },
+      },
+      required: ["moves", "item", "nature", "ability", "tera", "evs"],
+      additionalProperties: false,
+    },
+  },
+  required: ["resposta", "alterou_build", "build"],
+  additionalProperties: false,
+};
+
+export const SYSTEM_PROMPT = `You are the build assistant inside Dex Lab, a Pokémon team builder. Answer with a JSON object that follows the given schema. The player is building a team for a specific game and asks you, in Brazilian Portuguese, to explain or adjust the build of one Pokémon.
 
 You receive a JSON object with: the Pokémon (types, base stats, abilities), the game and its generation, the player's level, the style ("casual" = beating the story/campaign, "competitiva" = competitive battles), the current build, the exact list of moves this Pokémon can have in this game ("learnable", with how each is learned), the game's gym leaders and League ("bosses", with their types and level caps), the rest of the team, and the player's request ("pedido").
 

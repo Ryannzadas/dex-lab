@@ -9,7 +9,7 @@ import type { Member } from "@/lib/team";
 const STATS: AiStatKey[] = ["hp", "attack", "defense", "special-attack", "special-defense", "speed"];
 const EXAMPLES = ["Explica essa build", "Deixa ele mais rápido", "Sem golpes de recuo", "Quero aguentar a Elite 4"];
 
-/** Pergunta livre ao Claude sobre a build do membro aberto; aplica o ajuste com opção de desfazer. */
+/** Pergunta livre à IA sobre a build do membro aberto; aplica o ajuste com opção de desfazer. */
 export function ClaudeBuild({
   member,
   pokemon,
@@ -99,7 +99,7 @@ export function ClaudeBuild({
     <div className="mt-3 rounded-2xl border border-line bg-surface-solid/60 px-4 py-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <label htmlFor={id} className="text-xs font-bold">
-          Pedir ao Claude
+          Pedir à IA
         </label>
         <div role="group" aria-label="Estilo da build" className="flex gap-1 text-[11px]">
           {(["casual", "competitiva"] as const).map((s) => (
@@ -177,7 +177,7 @@ export function ClaudeBuild({
                 </button>
               )}
               <span>
-                Respostas do Claude (Anthropic) · {result.restantes} pergunta{result.restantes === 1 ? "" : "s"} restante{result.restantes === 1 ? "" : "s"} hoje
+                Respostas da IA (gpt-oss-120b via Groq) · {result.restantes} pergunta{result.restantes === 1 ? "" : "s"} restante{result.restantes === 1 ? "" : "s"} hoje
               </span>
             </div>
           </div>

@@ -71,7 +71,7 @@ No editor de cada membro, dois botões montam a build sozinhos e explicam cada e
 - **Build competitiva:** usa um set real da [Smogon](https://www.smogon.com/dex/) da geração do jogo (formatos individuais, do OU ao Little Cup), com golpes, item, natureza, EVs, IVs e Tipo Tera. Cada golpe é conferido no que o Pokémon aprende naquele jogo, incluindo pré-evoluções; o que não existir é trocado pelo melhor ataque calculado. Sem set (pré-evoluções, formas raras, ROM hacks de geração anterior), a build é calculada.
 - **Até a 3ª geração**, físico ou especial depende do tipo do golpe, como nos jogos da época.
 - Dados: sets da Smogon pelo projeto [pkmn](https://github.com/pkmn/smogon) e dados dos golpes do Pokémon Showdown, guardados para uso offline.
-- **Pedir ao Claude:** um campo livre para explicar ou ajustar a build em português ("deixa ele mais rápido", "sem golpes de recuo", "quero aguentar a Elite 4"), no estilo campanha ou competitivo. O Claude (Opus 5.5) recebe o Pokémon, o jogo, a build atual, os golpes que ele aprende naquele jogo, os líderes e o resto do time. O servidor confere a resposta antes de aplicar: golpe que ele não aprende, EVs acima de 510, habilidade, natureza, item ou Tera de outra geração são corrigidos e avisados. Dá pra desfazer o ajuste.
+- **Pedir à IA:** um campo livre para explicar ou ajustar a build em português ("deixa ele mais rápido", "sem golpes de recuo", "quero aguentar a Elite 4"), no estilo campanha ou competitivo. Usa o modelo aberto gpt-oss-120b no plano gratuito do [Groq](https://groq.com/), com saída estruturada. A IA recebe o Pokémon, o jogo, a build atual, os golpes que ele aprende naquele jogo, os líderes e o resto do time. O servidor confere a resposta antes de aplicar: golpe que ele não aprende, EVs acima de 510, habilidade, natureza, item ou Tera de outra geração são corrigidos e avisados. Dá pra desfazer o ajuste.
 
 ### Aba Comparar
 
@@ -123,17 +123,18 @@ O Dex Lab é um PWA: no celular, use "Adicionar à tela inicial"; no computador,
 - [awwwards.com](https://www.awwwards.com/) e [horizonx.so](https://horizonx.so/) (tela inicial): grade de cards grandes com legenda embaixo e contadores em caixinha; os Pokémon do último time num arco em perspectiva.
 - [gsap.com](https://gsap.com/): o título grande com as palavras entrando em cascata, os textos entre chaves `{ }` e os botões em pílula com seta num círculo.
 
-## Assistente com o Claude (configuração)
+## Assistente de IA (configuração)
 
-A função `api/ajustar-build.ts` roda na Vercel e chama a API da Anthropic. Variáveis de ambiente do projeto na Vercel:
+A função `api/ajustar-build.ts` roda na Vercel e chama a API do Groq. Variáveis de ambiente do projeto na Vercel:
 
 | Variável | Para quê |
 | --- | --- |
-| `ANTHROPIC_API_KEY` | Chave da API (console.anthropic.com). Sem ela, o painel avisa que o assistente não está configurado. |
+| `GROQ_API_KEY` | Chave da API do Groq (console.groq.com, plano gratuito). Sem ela, o painel avisa que o assistente não está configurado. |
 | `IA_LIMITE_POR_PESSOA` | Perguntas por pessoa por dia (padrão 10). |
-| `IA_LIMITE_DIARIO` | Perguntas por dia no total, por instância da função (padrão 200). |
+| `IA_LIMITE_DIARIO` | Perguntas por dia no total, por instância da função (padrão 500). |
+| `IA_MODELO` | Opcional: outro modelo do Groq com saída estruturada estrita (padrão `openai/gpt-oss-120b`). |
 
-Os limites ficam na memória da função, então servem para frear abuso, não como teto exato. O teto de gasto garantido é o limite mensal configurado no console da Anthropic.
+Os limites ficam na memória da função, então servem para frear abuso. O plano gratuito do Groq também tem limite próprio por dia; quando ele acaba, o painel pede para tentar mais tarde.
 
 ## Rodando
 
