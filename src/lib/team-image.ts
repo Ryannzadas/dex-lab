@@ -23,7 +23,9 @@ function loadImage(src: string): Promise<HTMLImageElement | null> {
     img.crossOrigin = "anonymous";
     img.onload = () => resolve(img);
     img.onerror = () => resolve(null);
-    img.src = src;
+    // Endereço próprio para o canvas: a cópia que o service worker guardou das <img> da tela vem sem
+    // permissão de CORS e faria o desenho falhar (as artes saíam em branco na imagem do time).
+    img.src = `${src}${src.includes("?") ? "&" : "?"}canvas=1`;
   });
 }
 
