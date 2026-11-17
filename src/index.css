@@ -169,6 +169,11 @@ body {
   }
 }
 
+/* Barra de cima abaixo do entalhe/Dynamic Island quando o app está instalado. */
+.safe-top {
+  padding-top: max(1rem, calc(env(safe-area-inset-top) + 0.5rem));
+}
+
 /* Barra de rolagem fina nas tabelas. */
 .scroll-x {
   scrollbar-width: thin;

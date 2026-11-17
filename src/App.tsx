@@ -274,12 +274,15 @@ function Toolbar({
   ];
 
   return (
-    <header
-      className={`sticky top-0 z-40 px-4 pt-4 pb-3 transition-[background-color,border-color,backdrop-filter] duration-300 sm:px-6 ${
-        scrolled ? "border-b border-line bg-bg/70 backdrop-blur-xl" : "border-b border-transparent"
-      }`}
-    >
-      <div className="mx-auto flex max-w-6xl items-center justify-between gap-2 sm:gap-3">
+    <header className="safe-top sticky top-0 z-40 px-4 pb-3 sm:px-6">
+      {/* Ao rolar, o fundo esmaece por trás dos botões em vez de virar uma faixa de borda reta. */}
+      <div
+        aria-hidden="true"
+        className={`pointer-events-none absolute inset-x-0 top-0 -bottom-8 bg-gradient-to-b from-bg from-55% via-bg/80 to-transparent transition-opacity duration-300 ${
+          scrolled ? "opacity-100" : "opacity-0"
+        }`}
+      />
+      <div className="relative mx-auto flex max-w-6xl items-center justify-between gap-2 sm:gap-3">
         <button
           type="button"
           onClick={() => setTab("inicio")}

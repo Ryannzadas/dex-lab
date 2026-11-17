@@ -83,6 +83,8 @@ export function useTheme() {
 
   useEffect(() => {
     document.documentElement.classList.toggle("dark", dark);
+    // Área do relógio/barra de status do celular na cor do tema.
+    document.querySelector('meta[name="theme-color"]')?.setAttribute("content", dark ? "#100f0e" : "#f7f5f2");
   }, [dark]);
 
   const cycle = useCallback(() => {
