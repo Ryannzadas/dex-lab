@@ -290,6 +290,7 @@ type RawSpecies = {
   flavor_text_entries: { flavor_text: string; language: { name: string }; version: { name: string } }[];
   varieties: { is_default: boolean; pokemon: { name: string; url: string } }[];
   evolution_chain: { url: string } | null;
+  evolves_from_species?: { name: string; url: string } | null;
   is_legendary: boolean;
   is_mythical: boolean;
   generation: { name: string };
@@ -415,6 +416,18 @@ export async function getEvolutionChain(url: string | null, fallback: { id: numb
 }
 
 /** Atalho usado pelo comparador. */
+/** Ids das espécies anteriores na evolução (Kingambit → [Bisharp, Pawniard]). */
+export async function preEvolutionIds(pokemon: Pokemon): Promise<number[]> {
+  const ids: number[] = [];
+  let species = await getCached<RawSpecies>(pokemon.speciesUrl);
+  while (species.evolves_from_species && ids.length < 3) {
+    const id = idFromUrl(species.evolves_from_species.url);
+    ids.push(id);
+    species = await getCached<RawSpecies>(`${API}/pokemon-species/${id}`);
+  }
+  return ids;
+}
+
 export async function getEvolution(pokemon: Pokemon): Promise<EvolutionStage[]> {
   const species = await getCached<RawSpecies>(pokemon.speciesUrl);
   return getEvolutionChain(species.evolution_chain?.url ?? null, pokemon);

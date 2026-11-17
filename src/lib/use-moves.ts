@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { getMove, type MoveInfo } from "./moves";
-import { getPokemon, movesFor, speciesIdOf, type Pokemon } from "./pokeapi";
+import { getPokemon, movesFor, speciesIdOf, type LearnedMove, type Pokemon } from "./pokeapi";
 
 /** Detalhes de vários golpes de uma vez (tipo, categoria, poder). */
 export function useMoveInfos(names: string[]) {
@@ -46,9 +46,9 @@ export function useLearnset(pokemon: Pokemon | null, versionGroup: string | null
 
   return useMemo(() => {
     const source = usesBase ? base : pokemon;
-    if (!source) return { moves: [] as string[], fallback: false };
+    if (!source) return { moves: [] as string[], entries: [] as LearnedMove[], fallback: false };
     // Golpes do jogo do time; se o jogo não tiver dados desse Pokémon, usa os mais recentes.
     const { moves, fallback } = movesFor(source, versionGroup);
-    return { moves: [...new Set(moves.map((m) => m.name))].sort(), fallback };
+    return { moves: [...new Set(moves.map((m) => m.name))].sort(), entries: moves, fallback };
   }, [usesBase, base, pokemon, versionGroup]);
 }

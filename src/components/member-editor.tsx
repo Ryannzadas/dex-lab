@@ -1,5 +1,6 @@
 import { useEffect, useId, useState } from "react";
-import { buildSuggestedMember, type BuildStyle } from "@/lib/auto-build";
+import type { BuildStyle } from "@/lib/auto-build";
+import { smartBuild, type SmartBuild } from "@/lib/smart-build";
 import { CATEGORY_PT, COMMON_ITEMS, TERA_TYPES } from "@/lib/moves";
 import { EV_MAX, EV_TOTAL, finalStats, IV_MAX, NATURES, SHORT_STAT } from "@/lib/natures";
 import { artworkUrl, displayName, getHoldableItems, pokemonName, type Pokemon, type StatKey } from "@/lib/pokeapi";
@@ -17,6 +18,8 @@ type Props = {
   onOpenSummary: () => void;
   /** Jogo do time: define golpes e quais campos existem (Tera, habilidade, natureza…). */
   game: Game | null;
+  /** Outros Pokémon do time: a build casual tenta cobrir o que eles não cobrem. */
+  teammates?: Pokemon[];
 };
 
 const field =
@@ -24,9 +27,9 @@ const field =
 const label = "mb-1 block text-xs font-semibold text-muted";
 
 /** Editor completo de um membro do time (inspirado no montador da Firma League, com menus customizados e sugestão de builds). */
-export function MemberEditor({ member, pokemon, onChange, onRemove, onOpenSummary, game }: Props) {
+export function MemberEditor({ member, pokemon, onChange, onRemove, onOpenSummary, game, teammates = [] }: Props) {
   const uid = useId();
-  const { moves: learnset, fallback: learnsetFallback } = useLearnset(pokemon, game?.versionGroup ?? null);
+  const { moves: learnset, entries: learnedEntries, fallback: learnsetFallback } = useLearnset(pokemon, game?.versionGroup ?? null);
   const gen = game?.gen ?? 9;
   // Habilidades e naturezas surgiram na 3ª geração; itens segurados, na 2ª; Tera só no Scarlet/Violet.
   const hasAbilities = gen >= 3;
@@ -36,6 +39,8 @@ export function MemberEditor({ member, pokemon, onChange, onRemove, onOpenSummar
   const display = member.nickname || pokemonName(pokemon.name);
   const [holdableItems, setHoldableItems] = useState<string[]>(COMMON_ITEMS);
   const [appliedBuild, setAppliedBuild] = useState<BuildStyle | null>(null);
+  const [building, setBuilding] = useState<BuildStyle | null>(null);
+  const [lastBuild, setLastBuild] = useState<(SmartBuild & { style: BuildStyle }) | null>(null);
 
   useEffect(() => {
     if (!hasItems) return;
@@ -50,9 +55,12 @@ export function MemberEditor({ member, pokemon, onChange, onRemove, onOpenSummar
     };
   }, [hasItems]);
 
-  const applySuggestedBuild = (style: BuildStyle) => {
-    const patch = buildSuggestedMember({ pokemon, learnset, game, style });
-    onChange(patch);
+  const applySuggestedBuild = async (style: BuildStyle) => {
+    setBuilding(style);
+    const result = await smartBuild({ pokemon, learned: learnedEntries, game, style, level: member.level, teammates });
+    setBuilding(null);
+    onChange(result.patch);
+    setLastBuild({ ...result, style });
     setAppliedBuild(style);
     window.setTimeout(() => setAppliedBuild((cur) => (cur === style ? null : cur)), 2000);
   };
@@ -143,13 +151,15 @@ export function MemberEditor({ member, pokemon, onChange, onRemove, onOpenSummar
         <div>
           <p className="text-xs font-bold">Preencher sugestão de build</p>
           <p className="text-xs text-muted">
-            Escolhe golpes, natureza, habilidade, item e EVs automaticamente para {display}.
+            {game
+              ? `Casual: calcula os golpes contra os líderes de ${game.label}. Competitiva: set real da Smogon da ${game.gen}ª geração.`
+              : "Casual: calcula os golpes de maior dano e cobertura. Competitiva: set real da Smogon."}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
-            disabled={learnset.length === 0}
+            disabled={learnset.length === 0 || building !== null}
             onClick={() => applySuggestedBuild("casual")}
             className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-semibold transition-colors disabled:opacity-45 ${
               appliedBuild === "casual"
@@ -158,11 +168,11 @@ export function MemberEditor({ member, pokemon, onChange, onRemove, onOpenSummar
             }`}
           >
             <span aria-hidden="true">✦</span>
-            <span>{appliedBuild === "casual" ? "Build casual aplicada!" : "Build casual (campanha)"}</span>
+            <span>{building === "casual" ? "Montando…" : appliedBuild === "casual" ? "Build casual aplicada!" : "Build casual (campanha)"}</span>
           </button>
           <button
             type="button"
-            disabled={learnset.length === 0}
+            disabled={learnset.length === 0 || building !== null}
             onClick={() => applySuggestedBuild("competitiva")}
             className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-semibold transition-colors disabled:opacity-45 ${
               appliedBuild === "competitiva"
@@ -171,9 +181,10 @@ export function MemberEditor({ member, pokemon, onChange, onRemove, onOpenSummar
             }`}
           >
             <span aria-hidden="true">⚡</span>
-            <span>{appliedBuild === "competitiva" ? "Build competitiva aplicada!" : "Build competitiva"}</span>
+            <span>{building === "competitiva" ? "Montando…" : appliedBuild === "competitiva" ? "Build competitiva aplicada!" : "Build competitiva"}</span>
           </button>
         </div>
+        {lastBuild && <BuildExplanation build={lastBuild} onClose={() => setLastBuild(null)} />}
       </div>
 
       <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -488,5 +499,45 @@ function Advanced({ member, pokemon, onChange }: { member: Member; pokemon: Poke
         </p>
       </div>
     </details>
+  );
+}
+
+/** Quadro "por que essa build": de onde veio e o motivo de cada escolha. */
+function BuildExplanation({ build, onClose }: { build: SmartBuild & { style: BuildStyle }; onClose: () => void }) {
+  const src =
+    build.source.kind === "smogon"
+      ? `Set da Smogon · ${build.source.format} · “${build.source.setName}”`
+      : build.source.kind === "calculada"
+        ? "Calculada pelo Dex Lab"
+        : "Sugestão simples";
+  return (
+    <div className="w-full basis-full border-t border-line pt-3" role="status">
+      <div className="flex items-start justify-between gap-3">
+        <p className="text-xs font-bold">
+          Por que essa build{" "}
+          <span className="ml-1 rounded-md border border-line px-1.5 py-0.5 font-mono text-[10px] font-medium text-muted">{src}</span>
+        </p>
+        <button type="button" onClick={onClose} className="shrink-0 text-xs text-muted underline-offset-2 hover:text-ink hover:underline">
+          Fechar
+        </button>
+      </div>
+      <ul className="mt-2 grid gap-1.5 text-xs leading-snug">
+        {build.reasons.map((r, i) => (
+          <li key={i} className="grid grid-cols-[minmax(5.5rem,auto)_1fr] gap-2">
+            <span className="font-semibold">{r.label}</span>
+            <span className="text-muted">{r.text}</span>
+          </li>
+        ))}
+      </ul>
+      {build.source.kind === "smogon" && (
+        <p className="mt-2 text-[11px] text-muted">
+          Sets da comunidade{" "}
+          <a className="underline" href="https://www.smogon.com/dex/" target="_blank" rel="noreferrer">
+            Smogon
+          </a>
+          , via projeto pkmn.
+        </p>
+      )}
+    </div>
   );
 }

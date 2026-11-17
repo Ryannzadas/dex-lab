@@ -59,6 +59,16 @@ export default defineConfig({
             },
           },
           {
+            // Sets da Smogon e dados dos golpes do Showdown (gerador de builds).
+            urlPattern: /^https:\/\/(pkmn\.github\.io\/smogon\/data\/|play\.pokemonshowdown\.com\/data\/moves\.json)/,
+            handler: 'StaleWhileRevalidate',
+            options: {
+              cacheName: 'builds',
+              expiration: { maxEntries: 15, maxAgeSeconds: 30 * DAY },
+              cacheableResponse: { statuses: [0, 200] },
+            },
+          },
+          {
             urlPattern: /^https:\/\/fonts\.(googleapis|gstatic)\.com\//,
             handler: 'CacheFirst',
             options: {

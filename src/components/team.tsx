@@ -97,6 +97,7 @@ export function TeamTab({ members, team, pending, onAdd, onRemove, onClear, onUp
           onRemove={() => onRemove(current.id)}
           onOpenSummary={() => onOpen(speciesIdOf(currentPokemon), currentPokemon.id)}
           game={game.game}
+          teammates={team.filter((p) => p.id !== currentPokemon.id)}
         />
       )}
 

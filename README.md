@@ -63,6 +63,15 @@ Escolha um golpe de um membro do time e um Pokémon alvo para ver o dano:
 - **Link compartilhado:** quem abre um link de time ganha ele como um time novo na lista, sem perder os seus.
 - **Imagem do time:** gera um card de 1200×675 com o time inteiro (arte, shiny, nível, natureza, tipos, item e golpes) para baixar em PNG ou copiar e colar no Discord.
 
+### Builds automáticas
+
+No editor de cada membro, dois botões montam a build sozinhos e explicam cada escolha no quadro "Por que essa build":
+
+- **Build casual (campanha):** calculada pelo app. Ele mede o dano real de cada golpe que o Pokémon já pode ter no nível atual (poder, precisão, STAB, atributo, recuo, recarga, dois turnos, quedas de atributo, PP), sem golpes de ovo, e escolhe a combinação que mais bate nos líderes e na Liga do jogo do time. Tipos que o resto do time não cobre pesam mais. O item é o que fortalece o golpe mais forte.
+- **Build competitiva:** usa um set real da [Smogon](https://www.smogon.com/dex/) da geração do jogo (formatos individuais, do OU ao Little Cup), com golpes, item, natureza, EVs, IVs e Tipo Tera. Cada golpe é conferido no que o Pokémon aprende naquele jogo, incluindo pré-evoluções; o que não existir é trocado pelo melhor ataque calculado. Sem set (pré-evoluções, formas raras, ROM hacks de geração anterior), a build é calculada.
+- **Até a 3ª geração**, físico ou especial depende do tipo do golpe, como nos jogos da época.
+- Dados: sets da Smogon pelo projeto [pkmn](https://github.com/pkmn/smogon) e dados dos golpes do Pokémon Showdown, guardados para uso offline.
+
 ### Aba Comparar
 
 Você coloca de dois a quatro Pokémon lado a lado e compara:
