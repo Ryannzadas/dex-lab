@@ -220,3 +220,71 @@ export function recommendPokemonForTeam({
   }
   return picked.length >= limit ? picked : candidates.slice(0, limit);
 }
+
+/**
+ * Sorteia até 6 Pokémon válidos para um desafio (Time Aleatório ou Monotype) no jogo escolhido.
+ */
+export function rollChallengeTeam({
+  list,
+  typeIndex,
+  gen,
+  check,
+  monotype = null,
+  onlyStrong = true,
+  includeLegendaries = false,
+  count = 6,
+}: {
+  list: PokemonRef[];
+  typeIndex: Record<number, TypeName[]>;
+  gen: number;
+  check: (speciesId: number, name: string) => Availability;
+  monotype?: TypeName | null;
+  onlyStrong?: boolean;
+  includeLegendaries?: boolean;
+  count?: number;
+}): PokemonRef[] {
+  const validGenTypes = new Set(typesOfGen(gen));
+
+  const filterPool = (strongOnly: boolean) =>
+    list.filter((p) => {
+      if (p.id > 1025) return false;
+      const isLegend = isLegendaryOrMythical(p.id);
+      if (isLegend && !includeLegendaries) return false;
+      if (strongOnly && !baseTierScore(p.id, isLegend)) return false;
+      if (check(p.id, p.name) === "blocked") return false;
+      const rawTypes = typeIndex[p.id];
+      if (!rawTypes || rawTypes.length === 0) return false;
+      const types = rawTypes.filter((t) => validGenTypes.has(t));
+      if (types.length === 0) return false;
+      if (monotype && !types.includes(monotype)) return false;
+      return true;
+    });
+
+  let pool = filterPool(onlyStrong);
+  // Se um Monotype específico tiver menos de 6 Pokémon "fortes" naquele jogo, completa com qualquer espécie daquele tipo no jogo.
+  if (pool.length < count && onlyStrong) {
+    const broader = filterPool(false);
+    const ids = new Set(pool.map((x) => x.id));
+    pool = [...pool, ...broader.filter((x) => !ids.has(x.id))];
+  }
+
+  // Embaralha (Fisher-Yates) e, quando não for Monotype, tenta não repetir o mesmo tipo primário mais de 2 vezes.
+  const shuffled = [...pool];
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+
+  if (monotype) return shuffled.slice(0, count);
+
+  const picked: PokemonRef[] = [];
+  const typeCount = new Map<TypeName, number>();
+  for (const p of shuffled) {
+    if (picked.length >= count) break;
+    const t0 = typeIndex[p.id]?.[0];
+    if (t0 && (typeCount.get(t0) ?? 0) >= 2 && shuffled.length > count * 2) continue;
+    if (t0) typeCount.set(t0, (typeCount.get(t0) ?? 0) + 1);
+    picked.push(p);
+  }
+  return picked.length >= count ? picked : shuffled.slice(0, count);
+}

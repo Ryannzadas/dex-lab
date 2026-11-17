@@ -229,6 +229,7 @@ export function useTeams(syncUrl = true) {
   );
   const remove = useCallback((id: number) => editMembers((cur) => cur.filter((m) => m.id !== id)), [editMembers]);
   const clear = useCallback(() => editMembers(() => []), [editMembers]);
+  const setMembers = useCallback((next: Member[]) => editMembers(() => cleanMembers(next)), [editMembers]);
   const update = useCallback(
     (id: number, patch: Partial<Member>) => editMembers((cur) => cur.map((m) => (m.id === id ? { ...m, ...patch, id } : m))),
     [editMembers],
@@ -291,6 +292,7 @@ export function useTeams(syncUrl = true) {
     add,
     remove,
     clear,
+    setMembers,
     update,
     select,
     create,

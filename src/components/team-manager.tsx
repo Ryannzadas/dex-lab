@@ -1,13 +1,17 @@
 import { useEffect, useId, useState } from "react";
-import { getPokemonList, spriteUrl, type Pokemon } from "@/lib/pokeapi";
+import { getTypeIndex } from "@/lib/dex";
+import { artworkUrl, getPokemonList, pokemonName, spriteUrl, type Pokemon, type PokemonRef } from "@/lib/pokeapi";
+import { rollChallengeTeam } from "@/lib/recommendations";
 import { exportShowdown, importShowdown } from "@/lib/showdown";
-import type { TeamsApi } from "@/lib/team";
+import { newMember, type TeamsApi } from "@/lib/team";
 import { drawTeamCard } from "@/lib/team-image";
+import { TYPE_INFO, typesOfGen, type TypeName } from "@/lib/types";
+import { useGame } from "@/lib/use-game";
 import { useMoveInfos } from "@/lib/use-moves";
-import { Card, CustomSelect, type SelectOption } from "./ui";
+import { Card, CustomSelect, TypeBadge, type SelectOption } from "./ui";
 import { GAMES, gameById } from "@/lib/games";
 
-type Panel = null | "rename" | "import" | "export" | "delete" | "image";
+type Panel = null | "rename" | "import" | "export" | "delete" | "image" | "challenge";
 
 const small =
   "inline-flex items-center gap-1.5 rounded-xl border border-line px-3 py-1.5 text-sm font-medium transition-colors hover:border-ink disabled:cursor-not-allowed disabled:opacity-45";
@@ -23,6 +27,9 @@ export function TeamManager({ api, loaded }: { api: TeamsApi; loaded: Pokemon[] 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="font-mono text-[11px] tracking-[0.18em] text-muted uppercase">Meus times · {teams.length}</p>
         <div className="flex flex-wrap gap-2">
+          <button type="button" className={small} onClick={() => toggle("challenge")} aria-expanded={panel === "challenge"}>
+            Sortear / Monotype
+          </button>
           <button type="button" className={small} onClick={() => toggle("import")} aria-expanded={panel === "import"}>
             Importar do Showdown
           </button>
@@ -123,6 +130,7 @@ export function TeamManager({ api, loaded }: { api: TeamsApi; loaded: Pokemon[] 
       {panel === "export" && <ExportPanel api={api} loaded={loaded} />}
       {panel === "import" && <ImportPanel api={api} onDone={() => setPanel(null)} />}
       {panel === "image" && <ImagePanel key={active.id + active.updatedAt} api={api} loaded={loaded} />}
+      {panel === "challenge" && <ChallengePanel key={active.id + (active.game ?? "")} api={api} onDone={() => setPanel(null)} />}
     </Card>
   );
 }
@@ -398,6 +406,222 @@ function GameSelect({ api }: { api: TeamsApi }) {
             : `Só entram Pokémon da Pokédex de ${game.region}${game.pokedexes.length > 1 ? " (com DLCs)" : ""}. Regras da ${game.gen}ª geração.`}
         </span>
       )}
+    </div>
+  );
+}
+
+/**
+ * Gerador de Desafio: sorteia 6 Pokémon válidos para o jogo aberto,
+ * seja um Time Aleatório variado ou um desafio Monotype (todos de 1 tipo só).
+ */
+function ChallengePanel({ api, onDone }: { api: TeamsApi; onDone: () => void }) {
+  const gameCtx = useGame(api.active.game);
+  const validTypes = typesOfGen(gameCtx.gen);
+  const [monotype, setMonotype] = useState<TypeName | null>(null);
+  const [onlyStrong, setOnlyStrong] = useState(true);
+  const [includeLegendaries, setIncludeLegendaries] = useState(false);
+  const [list, setList] = useState<PokemonRef[] | null>(null);
+  const [typeIndex, setTypeIndex] = useState<Record<number, TypeName[]> | null>(null);
+  const [rolled, setRolled] = useState<PokemonRef[]>([]);
+
+  useEffect(() => {
+    let alive = true;
+    Promise.all([getPokemonList(), getTypeIndex()])
+      .then(([l, ti]) => {
+        if (!alive) return;
+        setList(l);
+        setTypeIndex(ti);
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  const ready = !!list && !!typeIndex && (gameCtx.game?.kind !== "official" || !!gameCtx.species);
+
+  const roll = (nextMono = monotype, nextStrong = onlyStrong, nextLegend = includeLegendaries) => {
+    if (!list || !typeIndex) return;
+    setRolled(
+      rollChallengeTeam({
+        list,
+        typeIndex,
+        gen: gameCtx.gen,
+        check: gameCtx.check,
+        monotype: nextMono,
+        onlyStrong: nextStrong,
+        includeLegendaries: nextLegend,
+        count: 6,
+      }),
+    );
+  };
+
+  // Sorteia automaticamente assim que os dados terminam de carregar.
+  useEffect(() => {
+    if (ready && rolled.length === 0) roll();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ready]);
+
+  const gameLabel = gameCtx.game ? gameCtx.game.label : "Time livre";
+  const suggestedTeamName = monotype
+    ? `${gameCtx.game ? gameCtx.game.short : "Mono"} · ${TYPE_INFO[monotype].pt}`
+    : `${gameCtx.game ? gameCtx.game.short : "Time"} · Sorteado`;
+
+  return (
+    <div className="mt-4 grid gap-4 rounded-2xl border border-line bg-surface-solid/60 p-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <p className="text-sm font-bold">Gerador de Desafio ({gameLabel})</p>
+          <p className="text-xs text-muted">
+            Sorteia até 6 Pokémon disponíveis neste jogo — variados ou de um único tipo (Monotype).
+          </p>
+        </div>
+        <button
+          type="button"
+          disabled={!ready}
+          onClick={() => roll()}
+          className="inline-flex items-center gap-1.5 rounded-xl border border-line bg-surface-solid px-3 py-1.5 text-xs font-semibold transition-colors hover:border-ink disabled:opacity-45"
+        >
+          <svg viewBox="0 0 24 24" className="size-3.5" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+            <path d="M21 12a9 9 0 0 0-15.5-6.3L3 8M3 3v5h5M3 12a9 9 0 0 0 15.5 6.3L21 16m0 5v-5h-5" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+          Sortear de novo
+        </button>
+      </div>
+
+      {/* Escolha do tipo: Todos (Time Aleatório) ou um dos tipos da geração (Monotype) */}
+      <div>
+        <p className="mb-2 font-mono text-[10px] tracking-[0.16em] text-muted uppercase">
+          Formato: {monotype ? `Monotype ${TYPE_INFO[monotype].pt}` : "Time aleatório variado"}
+        </p>
+        <div className="flex flex-wrap gap-1.5">
+          <button
+            type="button"
+            aria-pressed={monotype === null}
+            onClick={() => {
+              setMonotype(null);
+              roll(null, onlyStrong, includeLegendaries);
+            }}
+            className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${
+              monotype === null ? "border-ink bg-ink text-bg" : "border-line bg-surface-solid text-muted hover:text-ink"
+            }`}
+          >
+            Qualquer tipo
+          </button>
+          {validTypes.map((t) => {
+            const on = monotype === t;
+            return (
+              <button
+                key={t}
+                type="button"
+                aria-pressed={on}
+                onClick={() => {
+                  const next = on ? null : t;
+                  setMonotype(next);
+                  roll(next, onlyStrong, includeLegendaries);
+                }}
+                className={`rounded-full px-2.5 py-1 text-xs font-medium text-white transition ${
+                  on ? "ring-2 ring-ink ring-offset-2 ring-offset-bg" : monotype ? "opacity-45 hover:opacity-100" : "hover:brightness-110"
+                }`}
+                style={{ background: TYPE_INFO[t].color, textShadow: "0 1px 1px rgb(0 0 0 / 0.35)" }}
+              >
+                {TYPE_INFO[t].pt}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-xs">
+        <label className="inline-flex cursor-pointer items-center gap-2 font-medium">
+          <input
+            type="checkbox"
+            checked={onlyStrong}
+            onChange={(e) => {
+              const v = e.target.checked;
+              setOnlyStrong(v);
+              roll(monotype, v, includeLegendaries);
+            }}
+            className="size-4 accent-current"
+          />
+          Priorizar evoluídos / fortes
+        </label>
+        <label className="inline-flex cursor-pointer items-center gap-2 font-medium">
+          <input
+            type="checkbox"
+            checked={includeLegendaries}
+            onChange={(e) => {
+              const v = e.target.checked;
+              setIncludeLegendaries(v);
+              roll(monotype, onlyStrong, v);
+            }}
+            className="size-4 accent-current"
+          />
+          Incluir lendários e míticos
+        </label>
+      </div>
+
+      {!ready ? (
+        <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-6">
+          {Array.from({ length: 6 }, (_, i) => (
+            <div key={i} className="h-32 animate-pulse rounded-2xl border border-line bg-line/40" />
+          ))}
+        </div>
+      ) : rolled.length === 0 ? (
+        <p className="text-sm text-muted">Nenhum Pokémon encontrado com esses filtros neste jogo.</p>
+      ) : (
+        <ul className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-6">
+          {rolled.map((p) => {
+            const pTypes = (typeIndex?.[p.id] ?? []).filter((t) => validTypes.includes(t));
+            return (
+              <li
+                key={p.id}
+                className="flex flex-col items-center rounded-2xl border border-line bg-surface-solid p-2.5 text-center"
+              >
+                <img src={artworkUrl(p.id)} alt="" width={84} height={84} loading="lazy" className="size-18 object-contain" />
+                <span className="mt-1 w-full truncate font-display text-xs font-bold sm:text-sm">{pokemonName(p.name)}</span>
+                <span className="mt-1 flex flex-wrap justify-center gap-1">
+                  {pTypes.map((t) => (
+                    <TypeBadge key={t} type={t} size="sm" />
+                  ))}
+                </span>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+
+      <div className="flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          disabled={rolled.length === 0}
+          onClick={() => {
+            api.setMembers(rolled.map((p) => newMember(p.id)));
+            onDone();
+          }}
+          className="rounded-xl bg-ink px-4 py-2 text-sm font-semibold text-bg disabled:opacity-45"
+        >
+          Usar neste time ({api.active.name})
+        </button>
+        <button
+          type="button"
+          disabled={rolled.length === 0 || !api.canCreate}
+          onClick={() => {
+            api.create(
+              suggestedTeamName,
+              rolled.map((p) => newMember(p.id)),
+              api.active.game,
+            );
+            onDone();
+          }}
+          className={small}
+        >
+          Salvar como novo time
+        </button>
+        <button type="button" className={small} onClick={onDone}>
+          Fechar
+        </button>
+      </div>
     </div>
   );
 }
