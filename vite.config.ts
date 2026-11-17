@@ -81,6 +81,8 @@ export default defineConfig({
       },
     }),
   ],
+  // Só variáveis públicas: VITE_* e a chave pública do Clerk criada pela integração da Vercel.
+  envPrefix: ['VITE_', 'NEXT_PUBLIC_CLERK_'],
   resolve: {
     alias: { '@': path.resolve(__dirname, './src') },
   },

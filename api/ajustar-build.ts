@@ -1,5 +1,6 @@
 import type { AiBuildRequest, AiBuildResponse } from "../src/lib/ai-build-types.js";
 import { AI_OUTPUT_JSON_SCHEMA, AiOutputSchema, RequestSchema, SYSTEM_PROMPT, sanitize, userMessage } from "./_build-ai.js";
+import { getRedis } from "./_redis.js";
 
 /**
  * POST /api/ajustar-build — a IA explica ou ajusta a build de um Pokémon.
@@ -12,9 +13,52 @@ const MODEL = process.env.IA_MODELO ?? "openai/gpt-oss-120b";
 const PER_PERSON = Number(process.env.IA_LIMITE_POR_PESSOA ?? 10);
 const PER_DAY = Number(process.env.IA_LIMITE_DIARIO ?? 500);
 
-// Contadores em memória: valem enquanto a instância da função estiver viva (freio contra abuso, não contabilidade exata).
+// Contadores: no Redis (exatos, entre todas as instâncias) ou, sem ele, em memória (aproximados).
 const perPerson = new Map<string, { day: string; n: number }>();
 let perDay = { day: "", n: 0 };
+
+type Quota = { ok: true; used: number; refund: () => Promise<void> } | { ok: false; erro: string };
+
+async function takeQuota(ip: string): Promise<Quota> {
+  const day = today();
+  const redis = getRedis();
+  if (redis) {
+    const personKey = `dexlab:ia:${day}:${ip}`;
+    const totalKey = `dexlab:ia:${day}:total`;
+    const [n, total] = await Promise.all([redis.incr(personKey), redis.incr(totalKey)]);
+    if (n === 1) await redis.expire(personKey, 2 * 86400);
+    if (total === 1) await redis.expire(totalKey, 2 * 86400);
+    const refund = async () => {
+      await Promise.all([redis.decr(personKey), redis.decr(totalKey)]);
+    };
+    if (total > PER_DAY) {
+      await refund();
+      return { ok: false, erro: "O assistente atingiu o limite de hoje. Tente de novo amanhã." };
+    }
+    if (n > PER_PERSON) {
+      await refund();
+      return { ok: false, erro: `Você já fez ${PER_PERSON} perguntas hoje. Volte amanhã.` };
+    }
+    return { ok: true, used: n - 1, refund };
+  }
+
+  if (perDay.day !== day) perDay = { day, n: 0 };
+  if (perDay.n >= PER_DAY) return { ok: false, erro: "O assistente atingiu o limite de hoje. Tente de novo amanhã." };
+  const mine = perPerson.get(ip);
+  const used = mine && mine.day === day ? mine.n : 0;
+  if (used >= PER_PERSON) return { ok: false, erro: `Você já fez ${PER_PERSON} perguntas hoje. Volte amanhã.` };
+  perPerson.set(ip, { day, n: used + 1 });
+  perDay.n += 1;
+  if (perPerson.size > 5000) perPerson.clear();
+  return {
+    ok: true,
+    used,
+    refund: async () => {
+      perPerson.set(ip, { day, n: used });
+      perDay.n -= 1;
+    },
+  };
+}
 
 function reply(body: AiBuildResponse, status = 200) {
   return Response.json(body, { status, headers: { "cache-control": "no-store" } });
@@ -48,23 +92,12 @@ export async function POST(request: Request): Promise<Response> {
   }
 
   // Limites de uso.
-  const day = today();
-  if (perDay.day !== day) perDay = { day, n: 0 };
-  if (perDay.n >= PER_DAY) {
-    return reply({ ok: false, erro: "O assistente atingiu o limite de hoje. Tente de novo amanhã." }, 429);
-  }
   const ip = (request.headers.get("x-forwarded-for") ?? "anon").split(",")[0].trim();
-  const mine = perPerson.get(ip);
-  const used = mine && mine.day === day ? mine.n : 0;
-  if (used >= PER_PERSON) {
-    return reply({ ok: false, erro: `Você já fez ${PER_PERSON} perguntas hoje. Volte amanhã.` }, 429);
-  }
-  perPerson.set(ip, { day, n: used + 1 });
-  perDay.n += 1;
-  if (perPerson.size > 5000) perPerson.clear();
+  const quota = await takeQuota(ip).catch((): Quota => ({ ok: false, erro: "O assistente está indisponível no momento." }));
+  if (!quota.ok) return reply({ ok: false, erro: quota.erro }, 429);
+  const { used } = quota;
   const refund = () => {
-    perPerson.set(ip, { day, n: used });
-    perDay.n -= 1;
+    quota.refund().catch(() => {});
   };
 
   try {

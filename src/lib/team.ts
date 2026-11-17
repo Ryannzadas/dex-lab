@@ -134,7 +134,8 @@ function readLegacy(): Member[] {
   return [];
 }
 
-type TeamsState = { teams: SavedTeam[]; activeId: string };
+/** `deleted`: times excluídos (id → quando), para a exclusão chegar aos outros aparelhos na sincronização. */
+type TeamsState = { teams: SavedTeam[]; activeId: string; deleted: Record<string, number> };
 
 function nextName(teams: SavedTeam[], base = "Time") {
   let n = teams.length + 1;
@@ -144,23 +145,31 @@ function nextName(teams: SavedTeam[], base = "Time") {
 
 const signature = (members: Member[]) => JSON.stringify(members);
 
+/** Limpa uma lista de times vinda do armazenamento ou da nuvem (qualquer coisa fora do formato é ignorada). */
+function normalizeTeams(raw: unknown): SavedTeam[] {
+  if (!Array.isArray(raw)) return [];
+  return (raw as SavedTeam[])
+    .filter((t) => t && typeof t.id === "string")
+    .slice(0, MAX_TEAMS)
+    .map((t) => ({
+      id: t.id.slice(0, 20),
+      name: typeof t.name === "string" && t.name.trim() ? t.name.slice(0, 40) : "Time",
+      members: cleanMembers(t.members),
+      updatedAt: Number(t.updatedAt) || Date.now(),
+      game: typeof t.game === "string" ? t.game : null,
+    }));
+}
+
 function readInitial(): TeamsState {
   let teams: SavedTeam[] = [];
   let activeId = "";
+  let deleted: Record<string, number> = {};
   try {
     const saved = JSON.parse(localStorage.getItem(TEAMS_KEY) ?? "null");
     if (saved && Array.isArray(saved.teams)) {
-      teams = (saved.teams as SavedTeam[])
-        .filter((t) => t && typeof t.id === "string")
-        .slice(0, MAX_TEAMS)
-        .map((t) => ({
-          id: t.id,
-          name: typeof t.name === "string" && t.name.trim() ? t.name.slice(0, 40) : "Time",
-          members: cleanMembers(t.members),
-          updatedAt: Number(t.updatedAt) || Date.now(),
-          game: typeof t.game === "string" ? t.game : null,
-        }));
+      teams = normalizeTeams(saved.teams);
       activeId = typeof saved.activeId === "string" ? saved.activeId : "";
+      if (saved.deleted && typeof saved.deleted === "object") deleted = saved.deleted;
     }
   } catch {
     // storage ilegível: começa do zero
@@ -184,7 +193,7 @@ function readInitial(): TeamsState {
   }
 
   if (!teams.some((t) => t.id === activeId)) activeId = teams[0].id;
-  return { teams, activeId };
+  return { teams, activeId, deleted };
 }
 
 export function useTeams(syncUrl = true) {
@@ -242,7 +251,7 @@ export function useTeams(syncUrl = true) {
     setState((s) => {
       if (s.teams.length >= MAX_TEAMS) return s;
       const team = { id: makeId(), name: name?.trim() || nextName(s.teams), members: cleanMembers(initial), updatedAt: Date.now(), game };
-      return { teams: [...s.teams, team], activeId: team.id };
+      return { ...s, teams: [...s.teams, team], activeId: team.id };
     });
   }, []);
 
@@ -252,27 +261,28 @@ export function useTeams(syncUrl = true) {
       if (!src || s.teams.length >= MAX_TEAMS) return s;
       const copy = { ...src, id: makeId(), name: `${src.name} (cópia)`.slice(0, 40), updatedAt: Date.now() };
       const at = s.teams.indexOf(src) + 1;
-      return { teams: [...s.teams.slice(0, at), copy, ...s.teams.slice(at)], activeId: copy.id };
+      return { ...s, teams: [...s.teams.slice(0, at), copy, ...s.teams.slice(at)], activeId: copy.id };
     });
   }, []);
 
   const rename = useCallback((id: string, name: string) => {
     const clean = name.trim().slice(0, 40);
     if (!clean) return;
-    setState((s) => ({ ...s, teams: s.teams.map((t) => (t.id === id ? { ...t, name: clean } : t)) }));
+    setState((s) => ({ ...s, teams: s.teams.map((t) => (t.id === id ? { ...t, name: clean, updatedAt: Date.now() } : t)) }));
   }, []);
 
   /** Exclui um time. Se era o último, fica um "Time 1" vazio no lugar. */
   const removeTeam = useCallback((id: string) => {
     setState((s) => {
+      const deleted = { ...s.deleted, [id]: Date.now() };
       const rest = s.teams.filter((t) => t.id !== id);
       if (rest.length === 0) {
         const fresh = { id: makeId(), name: "Time 1", members: [], updatedAt: Date.now(), game: null };
-        return { teams: [fresh], activeId: fresh.id };
+        return { teams: [fresh], activeId: fresh.id, deleted };
       }
       const idx = s.teams.findIndex((t) => t.id === id);
       const activeId = s.activeId === id ? rest[Math.max(0, idx - 1)].id : s.activeId;
-      return { teams: rest, activeId };
+      return { teams: rest, activeId, deleted };
     });
   }, []);
 
@@ -281,8 +291,20 @@ export function useTeams(syncUrl = true) {
     setState((s) => ({ ...s, teams: s.teams.map((t) => (t.id === id ? { ...t, game, updatedAt: Date.now() } : t)) }));
   }, []);
 
+  /** Recebe os times já juntados com a nuvem. O time aberto continua aberto se ainda existir. */
+  const applySync = useCallback((data: { teams: unknown; deleted: Record<string, number> }) => {
+    setState((s) => {
+      let teams = normalizeTeams(data.teams);
+      if (teams.length === 0) teams = [{ id: makeId(), name: "Time 1", members: [], updatedAt: Date.now(), game: null }];
+      const activeId = teams.some((t) => t.id === s.activeId) ? s.activeId : teams[0].id;
+      return { teams, activeId, deleted: data.deleted ?? {} };
+    });
+  }, []);
+
   return {
     teams: state.teams,
+    deleted: state.deleted,
+    applySync,
     setGame,
     active,
     members,

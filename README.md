@@ -123,6 +123,17 @@ O Dex Lab é um PWA: no celular, use "Adicionar à tela inicial"; no computador,
 - [awwwards.com](https://www.awwwards.com/) e [horizonx.so](https://horizonx.so/) (tela inicial): grade de cards grandes com legenda embaixo e contadores em caixinha; os Pokémon do último time num arco em perspectiva.
 - [gsap.com](https://gsap.com/): o título grande com as palavras entrando em cascata, os textos entre chaves `{ }` e os botões em pílula com seta num círculo.
 
+## Conta e sincronização
+
+Entrar com a conta (Google) é opcional e serve para os times aparecerem em todos os aparelhos. Sem login, tudo continua salvo só no navegador.
+
+- Ao entrar, os times do aparelho se juntam aos da nuvem sem perder nada: se o mesmo time foi mexido nos dois lugares, vale a versão mais recente. Times excluídos somem também nos outros aparelhos.
+- Depois disso, cada mudança sobe sozinha, e o app busca as novidades quando você volta para ele. A bolinha no avatar mostra se está tudo sincronizado.
+- No menu da conta, "Apagar meus dados da nuvem" remove os times guardados e sai da conta (o aparelho mantém a cópia dele).
+- Só os times ficam guardados, ligados ao id da conta. Login pelo [Clerk](https://clerk.com/) e dados no [Upstash Redis](https://upstash.com/), os dois pela Vercel Marketplace. O Clerk só é carregado depois que o app abre.
+
+Variáveis (criadas pelas integrações da Vercel): `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY` e `KV_REST_API_URL` / `KV_REST_API_TOKEN` (ou `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN`). Com o Redis configurado, o limite de perguntas da IA também passa a ser contado nele, exato entre todas as instâncias.
+
 ## Assistente de IA (configuração)
 
 A função `api/ajustar-build.ts` roda na Vercel e chama a API do Groq. Variáveis de ambiente do projeto na Vercel:

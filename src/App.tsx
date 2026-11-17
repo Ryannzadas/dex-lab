@@ -1,10 +1,14 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, lazy, Suspense } from "react";
 import { Blobs } from "@/components/blobs";
 import { CompareTab } from "@/components/compare";
 import { SummaryView } from "@/components/summary";
 import { TeamTab } from "@/components/team";
 import { TeamManager } from "@/components/team-manager";
 import { Home } from "@/components/home";
+
+// Login (opcional) para sincronizar os times entre aparelhos; o Clerk só carrega depois que o app abre.
+const CloudRoot = lazy(() => import("@/components/cloud-root"));
+const CLERK_KEY = import.meta.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY ?? import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
 import { Pokedex } from "@/components/pokedex";
 
 import { useIdList, useTheme, type ThemeMode } from "@/lib/state";
@@ -118,7 +122,19 @@ export default function App() {
   return (
     <>
       <Blobs types={activeTypes} />
-      <Toolbar tab={summaryId !== null ? null : tab} setTab={goToTab} themeMode={theme.mode} toggleTheme={theme.cycle} />
+      <Toolbar
+        tab={summaryId !== null ? null : tab}
+        setTab={goToTab}
+        themeMode={theme.mode}
+        toggleTheme={theme.cycle}
+        account={
+          CLERK_KEY ? (
+            <Suspense fallback={<span className="size-8 sm:size-9" aria-hidden="true" />}>
+              <CloudRoot api={team} publishableKey={CLERK_KEY} />
+            </Suspense>
+          ) : null
+        }
+      />
 
       <main className="mx-auto max-w-6xl px-4 pb-16 sm:px-6">
         {summaryId !== null ? (
@@ -216,11 +232,13 @@ function Toolbar({
   setTab,
   themeMode,
   toggleTheme,
+  account,
 }: {
   tab: Tab | null;
   setTab: (t: Tab) => void;
   themeMode: ThemeMode;
   toggleTheme: () => void;
+  account: React.ReactNode;
 }) {
   const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
     {
@@ -332,6 +350,12 @@ function Toolbar({
               </svg>
             )}
           </button>
+          {account && (
+            <>
+              <span className="mx-0.5 h-5 w-px shrink-0 bg-line sm:mx-1" aria-hidden="true" />
+              {account}
+            </>
+          )}
         </nav>
       </div>
     </header>
