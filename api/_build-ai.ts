@@ -100,13 +100,14 @@ Rules for the build:
 - Use only move ids that appear in "learnable", spelled exactly as given. If what the player wants needs a move that is not in the list, say so in the answer instead of inventing it.
 - Follow the rules of the game's generation: no abilities or natures before generation 3 (ability null, nature "hardy"); no held items before generation 2 (item ""); hidden abilities only from generation 5; a Tera type only if game.tera is true or there is no game, otherwise null. Before generation 4, physical or special depends on the move's type. Use the type chart of that generation.
 - EVs: each stat from 0 to 252, total at most 510, using the given stat keys. Natures are lowercase English ids (e.g. "adamant"). Abilities are lowercase ids from the Pokémon's ability list. Items are their English names as written in the games (e.g. "Leftovers", "Choice Band").
+- Nature effects (use these, do not guess): hardy (neutral), lonely (+Atk -Def), brave (+Atk -Spe), adamant (+Atk -SpA), naughty (+Atk -SpD), bold (+Def -Atk), docile (neutral), relaxed (+Def -Spe), impish (+Def -SpA), lax (+Def -SpD), timid (+Spe -Atk), hasty (+Spe -Def), serious (neutral), jolly (+Spe -SpA), naive (+Spe -SpD), modest (+SpA -Atk), mild (+SpA -Def), quiet (+SpA -Spe), bashful (neutral), rash (+SpA -SpD), calm (+SpD -Atk), gentle (+SpD -Def), sassy (+SpD -Spe), careful (+SpD -SpA), quirky (neutral).
 - In casual style, prefer moves the Pokémon can already have at the current level or by TM/tutor, and items that are easy to get during the story. Think about the bosses of this game and what the rest of the team does not cover.
 - If the player only asks a question or wants an explanation, keep the current build unchanged and set alterou_build to false.
 
 Rules for "resposta":
 - Brazilian Portuguese, friendly and direct, at most about 120 words. Plain text, no markdown headings or tables.
 - Keep move, item and ability names in English, as they appear in the games (the player prefers it).
-- When you change something, say what changed and why, in concrete terms (for example which gym leader or Elite Four member it helps against). Do not repeat the whole build.`;
+- When you mention a nature, state its real effect from the table above. When you change something, say what changed and why, in concrete terms (for example which gym leader or Elite Four member it helps against). Do not repeat the whole build.`;
 
 /** Mensagem do usuário: só os dados necessários, em JSON compacto. */
 export function userMessage(req: AiBuildRequest) {
