@@ -291,7 +291,7 @@ function Toolbar({
         </button>
 
         <nav className="flex min-w-0 items-center gap-0.5 rounded-2xl border border-line bg-surface p-1 shadow-sm backdrop-blur-xl sm:gap-1">
-          <div role="tablist" aria-label="Ferramentas" className="flex gap-0.5 sm:gap-1">
+          <div role="tablist" aria-label="Ferramentas" className="flex min-w-0 gap-0.5 sm:gap-1">
             {tabs.map((t) => (
               <button
                 key={t.id}
@@ -304,10 +304,10 @@ function Toolbar({
                 title={t.label}
                 onClick={() => setTab(t.id)}
                 className={`flex items-center gap-1.5 rounded-xl px-2.5 py-2 text-xs font-medium transition-colors sm:gap-2 sm:px-3 sm:text-sm ${
-                  tab === t.id ? "bg-ink text-bg" : "text-muted hover:bg-line/60 hover:text-ink"
+                  tab === t.id ? "min-w-0 bg-ink text-bg" : "shrink-0 text-muted hover:bg-line/60 hover:text-ink"
                 }`}
               >
-                {t.icon}
+                <span className="shrink-0">{t.icon}</span>
                 {/* No celular só a aba aberta mostra o nome, para todas caberem sem cortar. */}
                 <span className={tab === t.id ? "truncate" : "hidden sm:inline"}>{t.label}</span>
               </button>

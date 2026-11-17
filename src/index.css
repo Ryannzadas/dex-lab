@@ -274,26 +274,39 @@ body {
   }
 }
 @media (max-width: 640px) {
+  /* Celular: duas fileiras de cartas em leque, sem passar da largura da tela
+     (no iPhone qualquer pedaço pra fora deixa arrastar a página pro lado). */
   .legend-fan {
-    padding: 0.75rem 0.25rem 1.75rem;
+    flex-wrap: wrap;
+    row-gap: 0.5rem;
+    padding: 1.25rem 0 1.5rem;
+    max-width: 380px;
   }
   .legend-fan li {
-    margin-inline: clamp(-18px, -4.2vw, -10px);
-    transform: translateY(calc(var(--abs-i, 0) * 12px)) rotate(calc(var(--i) * 6deg));
+    flex: 0 0 33.333%;
+    display: flex;
+    justify-content: center;
+    margin-inline: 0;
+    transform: translateY(calc(var(--abs-im, 0) * 10px)) rotate(calc(var(--im, 0) * 6deg));
   }
   .legend-fan li:hover,
   .legend-fan li.armed {
-    transform: translateY(calc(var(--abs-i, 0) * 12px)) rotate(0deg);
+    transform: translateY(calc(var(--abs-im, 0) * 10px)) rotate(0deg);
   }
   .legend-card {
-    width: clamp(68px, 20.5vw, 96px);
-    padding: 5px 5px 8px;
-    border-radius: 12px;
+    /* Folga dos lados para a carta inclinada não encostar na borda da tela. */
+    width: min(80%, 100px);
+    padding: 6px 6px 9px;
+    border-radius: 14px;
+  }
+  .legend-fan li:hover .legend-card,
+  .legend-fan li.armed .legend-card {
+    transform: translateY(-10px) scale(1.04);
   }
 }
 @media (hover: none) {
   .legend-fan li:hover:not(.armed) {
-    transform: translateY(calc(var(--abs-i, 0) * 12px)) rotate(calc(var(--i) * 6deg));
+    transform: translateY(calc(var(--abs-i, 0) * 16px)) rotate(calc(var(--i) * 6deg));
   }
   .legend-fan li:hover:not(.armed) .legend-card {
     transform: none;
@@ -319,5 +332,11 @@ body {
   .legend-art img {
     transition: none !important;
     animation: none !important;
+  }
+}
+
+@media (hover: none) and (max-width: 640px) {
+  .legend-fan li:hover:not(.armed) {
+    transform: translateY(calc(var(--abs-im, 0) * 10px)) rotate(calc(var(--im, 0) * 6deg));
   }
 }

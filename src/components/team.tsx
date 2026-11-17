@@ -53,7 +53,7 @@ export function TeamTab({ members, team, pending, onAdd, onRemove, onClear, onUp
           <SectionHeading kicker={`Time · ${ids.length}/${MAX}`} title="Escolha até seis">
             Busque pelo nome em inglês ou pelo número da Pokédex. Clique num membro para configurar.
           </SectionHeading>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <ShareButton disabled={ids.length === 0} />
             {ids.length > 0 && (
               <button type="button" onClick={onClear} className="pill border-line">

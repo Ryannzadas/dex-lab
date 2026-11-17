@@ -414,9 +414,11 @@ function TeamArc({
   };
 
   const center = (n - 1) / 2;
+  // No celular o leque vira duas fileiras; cada uma tem o seu próprio centro.
+  const perRow = Math.ceil(n / 2);
 
   return (
-    <div className="relative flex flex-col items-center">
+    <div className="relative -mx-4 flex w-[calc(100%+2rem)] flex-col items-center overflow-hidden sm:mx-0 sm:w-full sm:overflow-visible">
       <ul
         ref={fanRef}
         className={`legend-fan${armedIdx !== null ? " has-armed" : ""}`}
@@ -436,6 +438,8 @@ function TeamArc({
           const dexNum = id <= 1025 ? id : Number(Object.entries(names).find(([k, v]) => Number(k) <= 1025 && slug?.startsWith(`${v}-`))?.[0] ?? id);
           const region = regionLabelOfId(dexNum);
           const isCenter = absOffset < 0.6;
+          const rowSize = idx < perRow ? perRow : n - perRow;
+          const rowOffset = (idx % perRow) - (rowSize - 1) / 2;
           return (
             <li
               key={`${id}-${idx}`}
@@ -444,6 +448,8 @@ function TeamArc({
                 {
                   "--i": offset,
                   "--abs-i": absOffset,
+                  "--im": rowOffset,
+                  "--abs-im": Math.abs(rowOffset),
                   "--z": 12 - Math.round(absOffset * 2),
                 } as React.CSSProperties
               }
