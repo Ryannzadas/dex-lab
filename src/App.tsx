@@ -222,14 +222,6 @@ function Toolbar({
   themeMode: ThemeMode;
   toggleTheme: () => void;
 }) {
-  // Depois de rolar um pouco, o topo ganha fundo desfocado para não ficar por cima do texto.
-  const [scrolled, setScrolled] = useState(() => window.scrollY > 8);
-  useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 8);
-    window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
-  }, []);
-
   const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
     {
       id: "inicio",
@@ -275,12 +267,10 @@ function Toolbar({
 
   return (
     <header className="safe-top sticky top-0 z-40 px-4 pb-3 sm:px-6">
-      {/* Ao rolar, o fundo esmaece por trás dos botões em vez de virar uma faixa de borda reta. */}
+      {/* Fundo sempre na cor do tema no topo (igual à faixa do relógio do celular), esmaecendo para baixo. */}
       <div
         aria-hidden="true"
-        className={`pointer-events-none absolute inset-x-0 top-0 -bottom-8 bg-gradient-to-b from-bg from-55% via-bg/80 to-transparent transition-opacity duration-300 ${
-          scrolled ? "opacity-100" : "opacity-0"
-        }`}
+        className="pointer-events-none absolute inset-x-0 top-0 -bottom-8 bg-gradient-to-b from-bg from-55% via-bg/80 to-transparent"
       />
       <div className="relative mx-auto flex max-w-6xl items-center justify-between gap-2 sm:gap-3">
         <button
