@@ -1,33 +1,37 @@
-import { verifyToken } from "@clerk/backend";
+import { createRemoteJWKSet, jwtVerify } from "jose";
 import { mergeSync, type SyncData } from "../src/lib/sync-merge.js";
 import { getRedis } from "./_redis.js";
 
 /**
- * /api/times — times salvos na nuvem de quem entrou com a conta.
+ * /api/times — times salvos na nuvem de quem entrou com a conta (login com Google pelo Firebase).
  * GET: devolve os times. PUT: junta os times enviados com os da nuvem e devolve o resultado.
  * DELETE: apaga tudo da nuvem. Só guarda os times, ligados ao id da conta.
  */
 
 const MAX_BODY = 400_000;
-const keyOf = (userId: string) => `dexlab:times:${userId}`;
+const keyOf = (uid: string) => `dexlab:times:fb:${uid}`;
+const PROJECT_ID = process.env.VITE_FIREBASE_PROJECT_ID ?? process.env.FIREBASE_PROJECT_ID;
+
+// Chaves públicas do Google que assinam os tokens do Firebase (o jose guarda e renova sozinho).
+const GOOGLE_KEYS = createRemoteJWKSet(new URL("https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com"));
 
 function json(body: unknown, status = 200) {
   return Response.json(body, { status, headers: { "cache-control": "no-store" } });
 }
 
-/** Confere o token do Clerk e devolve o id da conta (ou null). */
+/** Confere o token do Firebase (assinatura, projeto, emissor, validade) e devolve o id da conta. */
 async function userIdOf(request: Request): Promise<string | null> {
   const token = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
-  const secretKey = process.env.CLERK_SECRET_KEY;
-  if (!token || !secretKey) return null;
-  const host = request.headers.get("x-forwarded-host") ?? request.headers.get("host");
+  if (!token || !PROJECT_ID) return null;
   try {
-    const claims = await verifyToken(token, {
-      secretKey,
-      // O token só vale se foi emitido para este site.
-      authorizedParties: host ? [`https://${host}`, `http://${host}`] : undefined,
+    const { payload } = await jwtVerify(token, GOOGLE_KEYS, {
+      algorithms: ["RS256"],
+      issuer: `https://securetoken.google.com/${PROJECT_ID}`,
+      audience: PROJECT_ID,
     });
-    return typeof claims.sub === "string" ? claims.sub : null;
+    const authTime = typeof payload.auth_time === "number" ? payload.auth_time : 0;
+    if (typeof payload.sub !== "string" || !payload.sub || authTime > Date.now() / 1000 + 60) return null;
+    return payload.sub;
   } catch {
     return null;
   }
@@ -40,7 +44,7 @@ function readStored(raw: unknown): SyncData {
 
 async function handle(request: Request): Promise<Response> {
   const redis = getRedis();
-  if (!redis || !process.env.CLERK_SECRET_KEY) return json({ erro: "Sincronização não configurada." }, 503);
+  if (!redis || !PROJECT_ID) return json({ erro: "Sincronização não configurada." }, 503);
 
   const userId = await userIdOf(request);
   if (!userId) return json({ erro: "Entre com sua conta para sincronizar." }, 401);

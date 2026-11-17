@@ -130,9 +130,9 @@ Entrar com a conta (Google) é opcional e serve para os times aparecerem em todo
 - Ao entrar, os times do aparelho se juntam aos da nuvem sem perder nada: se o mesmo time foi mexido nos dois lugares, vale a versão mais recente. Times excluídos somem também nos outros aparelhos.
 - Depois disso, cada mudança sobe sozinha, e o app busca as novidades quando você volta para ele. A bolinha no avatar mostra se está tudo sincronizado.
 - No menu da conta, "Apagar meus dados da nuvem" remove os times guardados e sai da conta (o aparelho mantém a cópia dele).
-- Só os times ficam guardados, ligados ao id da conta. Login pelo [Clerk](https://clerk.com/) e dados no [Upstash Redis](https://upstash.com/), os dois pela Vercel Marketplace. O Clerk só é carregado depois que o app abre.
+- Só os times ficam guardados, ligados ao id da conta. Login com Google pelo [Firebase Authentication](https://firebase.google.com/products/auth) e dados no [Upstash Redis](https://upstash.com/) (pela Vercel Marketplace). O Firebase só é carregado depois que o app abre.
 
-Variáveis (criadas pelas integrações da Vercel): `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY` e `KV_REST_API_URL` / `KV_REST_API_TOKEN` (ou `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN`). Com o Redis configurado, o limite de perguntas da IA também passa a ser contado nele, exato entre todas as instâncias.
+Variáveis na Vercel: `VITE_FIREBASE_API_KEY`, `VITE_FIREBASE_AUTH_DOMAIN`, `VITE_FIREBASE_PROJECT_ID` e `VITE_FIREBASE_APP_ID` (configuração pública do app Web no Firebase, com `dex-lab.vercel.app` nos domínios autorizados), mais `KV_REST_API_URL` / `KV_REST_API_TOKEN` (ou `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN`) criadas pela integração do Upstash. O servidor confere o token do Firebase com as chaves públicas do Google, sem chave secreta. Com o Redis configurado, o limite de perguntas da IA também passa a ser contado nele, exato entre todas as instâncias.
 
 ## Assistente de IA (configuração)
 

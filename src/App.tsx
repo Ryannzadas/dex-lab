@@ -6,9 +6,10 @@ import { TeamTab } from "@/components/team";
 import { TeamManager } from "@/components/team-manager";
 import { Home } from "@/components/home";
 
-// Login (opcional) para sincronizar os times entre aparelhos; o Clerk só carrega depois que o app abre.
+// Login (opcional) para sincronizar os times entre aparelhos; o Firebase só carrega depois que o app abre.
 const CloudRoot = lazy(() => import("@/components/cloud-root"));
-const CLERK_KEY = import.meta.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY ?? import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
+const env = import.meta.env;
+const CLOUD_ENABLED = Boolean(env.VITE_FIREBASE_API_KEY && env.VITE_FIREBASE_AUTH_DOMAIN && env.VITE_FIREBASE_PROJECT_ID && env.VITE_FIREBASE_APP_ID);
 import { Pokedex } from "@/components/pokedex";
 
 import { useIdList, useTheme, type ThemeMode } from "@/lib/state";
@@ -128,9 +129,9 @@ export default function App() {
         themeMode={theme.mode}
         toggleTheme={theme.cycle}
         account={
-          CLERK_KEY ? (
+          CLOUD_ENABLED ? (
             <Suspense fallback={<span className="size-8 sm:size-9" aria-hidden="true" />}>
-              <CloudRoot api={team} publishableKey={CLERK_KEY} />
+              <CloudRoot api={team} />
             </Suspense>
           ) : null
         }

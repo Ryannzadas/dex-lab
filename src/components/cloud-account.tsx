@@ -1,14 +1,21 @@
-import { SignInButton, UserButton, useAuth, useClerk } from "@clerk/react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { isBlankTeam, mergeSync, type SyncData, type SyncTeam } from "@/lib/sync-merge";
 import type { TeamsApi } from "@/lib/team";
 
-type Status = "fora" | "sincronizando" | "ok" | "erro";
+/** O que o botão de conta precisa saber do serviço de login (hoje, Firebase). */
+export type CloudAuth = {
+  ready: boolean;
+  user: { uid: string; name: string; email: string | null; photo: string | null } | null;
+  getToken: () => Promise<string | null>;
+  signIn: () => Promise<void>;
+  signOut: () => Promise<void>;
+};
+
+type Status = "sincronizando" | "ok" | "erro";
 
 const STATUS_LABEL: Record<Status, string> = {
-  fora: "",
   sincronizando: "Sincronizando os times…",
-  ok: "Times sincronizados com a sua conta",
+  ok: "Times sincronizados",
   erro: "Não deu para sincronizar agora. O app tenta de novo sozinho.",
 };
 
@@ -22,30 +29,33 @@ const sig = (d: SyncData) => JSON.stringify(d);
  * Botão de conta na barra de cima + sincronização dos times entre aparelhos.
  * Sem login, nada muda: os times ficam só neste aparelho.
  */
-export function CloudAccount({ api }: { api: TeamsApi }) {
-  const { isLoaded, isSignedIn, getToken } = useAuth();
-  const { signOut } = useClerk();
-  const [status, setStatus] = useState<Exclude<Status, "fora">>("sincronizando");
+export function CloudAccount({ api, auth }: { api: TeamsApi; auth: CloudAuth }) {
+  const [status, setStatus] = useState<Status>("sincronizando");
+  const [open, setOpen] = useState(false);
+  const [signInError, setSignInError] = useState<string | null>(null);
+  const menuId = useId();
+  const boxRef = useRef<HTMLSpanElement>(null);
   const apiRef = useRef(api);
+  const authRef = useRef(auth);
   useEffect(() => {
     apiRef.current = api;
+    authRef.current = auth;
   });
   const lastSent = useRef("");
   const ready = useRef(false);
+  const uid = auth.user?.uid ?? null;
 
-  const call = useCallback(
-    async (method: "GET" | "PUT" | "DELETE", body?: SyncData): Promise<SyncData> => {
-      const token = await getToken();
-      const res = await fetch("/api/times", {
-        method,
-        headers: { authorization: `Bearer ${token}`, ...(body ? { "content-type": "application/json" } : {}) },
-        body: body ? JSON.stringify(body) : undefined,
-      });
-      if (!res.ok) throw new Error(`times ${res.status}`);
-      return (await res.json()) as SyncData;
-    },
-    [getToken],
-  );
+  const call = useCallback(async (method: "GET" | "PUT" | "DELETE", body?: SyncData): Promise<SyncData> => {
+    const token = await authRef.current.getToken();
+    if (!token) throw new Error("sem login");
+    const res = await fetch("/api/times", {
+      method,
+      headers: { authorization: `Bearer ${token}`, ...(body ? { "content-type": "application/json" } : {}) },
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    if (!res.ok) throw new Error(`times ${res.status}`);
+    return (await res.json()) as SyncData;
+  }, []);
 
   /** Junta o que veio da nuvem com o que está no aparelho agora e aplica, se mudou algo. */
   const absorb = useCallback((cloud: SyncData) => {
@@ -57,8 +67,7 @@ export function CloudAccount({ api }: { api: TeamsApi }) {
 
   // Ao entrar: manda os times deste aparelho, o servidor junta com os da nuvem e devolve tudo.
   useEffect(() => {
-    if (!isLoaded) return;
-    if (!isSignedIn) {
+    if (!uid) {
       ready.current = false;
       return;
     }
@@ -74,12 +83,12 @@ export function CloudAccount({ api }: { api: TeamsApi }) {
     return () => {
       alive = false;
     };
-  }, [isLoaded, isSignedIn, call, absorb]);
+  }, [uid, call, absorb]);
 
   // Cada mudança nos times sobe para a nuvem (com uma pequena espera para juntar edições seguidas).
   const current = sig(payloadOf(api));
   useEffect(() => {
-    if (!isSignedIn || !ready.current || current === lastSent.current) return;
+    if (!uid || !ready.current || current === lastSent.current) return;
     const timer = window.setTimeout(() => {
       setStatus("sincronizando");
       call("PUT", JSON.parse(current) as SyncData)
@@ -90,11 +99,11 @@ export function CloudAccount({ api }: { api: TeamsApi }) {
         .catch(() => setStatus("erro"));
     }, 1500);
     return () => window.clearTimeout(timer);
-  }, [current, isSignedIn, call, absorb]);
+  }, [current, uid, call, absorb]);
 
   // Ao voltar para o app (trocou de aba ou de aparelho), busca as novidades.
   useEffect(() => {
-    if (!isSignedIn) return;
+    if (!uid) return;
     const pull = () => {
       if (document.visibilityState !== "visible" || !ready.current) return;
       call("GET")
@@ -110,64 +119,109 @@ export function CloudAccount({ api }: { api: TeamsApi }) {
       document.removeEventListener("visibilitychange", pull);
       window.removeEventListener("focus", pull);
     };
-  }, [isSignedIn, call, absorb]);
+  }, [uid, call, absorb]);
+
+  // Fecha o menu ao clicar fora ou apertar Esc.
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: PointerEvent) => {
+      if (!boxRef.current?.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
+    document.addEventListener("pointerdown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("pointerdown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  const signIn = async () => {
+    setSignInError(null);
+    try {
+      await auth.signIn();
+    } catch {
+      setSignInError("Não deu para entrar. Tente de novo.");
+    }
+  };
+
+  const signOut = async () => {
+    setOpen(false);
+    ready.current = false;
+    await auth.signOut();
+  };
 
   const eraseCloud = async () => {
     if (!window.confirm("Apagar os seus times da nuvem? Eles continuam neste aparelho, mas somem dos outros.")) return;
     try {
       await call("DELETE");
-      ready.current = false;
       await signOut();
     } catch {
       setStatus("erro");
     }
   };
 
-  if (!isLoaded) return <span className="grid size-8 place-items-center sm:size-9" aria-hidden="true" />;
+  if (!auth.ready) return <span className="size-8 shrink-0 sm:size-9" aria-hidden="true" />;
 
-  if (!isSignedIn) {
+  if (!auth.user) {
     return (
-      <SignInButton mode="modal">
-        <button
-          type="button"
-          title="Entrar para sincronizar os times entre aparelhos"
-          aria-label="Entrar com sua conta"
-          className="flex shrink-0 items-center gap-1.5 rounded-xl px-2 py-2 text-xs font-medium text-muted transition-colors hover:bg-line/60 hover:text-ink sm:text-sm"
-        >
-          <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-            <circle cx="12" cy="8" r="4" />
-            <path d="M4 21a8 8 0 0 1 16 0" strokeLinecap="round" />
-          </svg>
-          <span className="hidden sm:inline">Entrar</span>
-        </button>
-      </SignInButton>
+      <button
+        type="button"
+        onClick={() => void signIn()}
+        title={signInError ?? "Entrar com Google para sincronizar os times entre aparelhos"}
+        aria-label={signInError ?? "Entrar com Google"}
+        className="flex shrink-0 items-center gap-1.5 rounded-xl px-2 py-2 text-xs font-medium text-muted transition-colors hover:bg-line/60 hover:text-ink sm:text-sm"
+      >
+        <svg viewBox="0 0 24 24" className={`size-4 ${signInError ? "text-red-500" : ""}`} fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+          <circle cx="12" cy="8" r="4" />
+          <path d="M4 21a8 8 0 0 1 16 0" strokeLinecap="round" />
+        </svg>
+        <span className="hidden sm:inline">Entrar</span>
+      </button>
     );
   }
 
+  const { name, email, photo } = auth.user;
+  const dot = status === "erro" ? "bg-red-500" : status === "sincronizando" ? "animate-pulse bg-amber-400" : "bg-emerald-500";
+
   return (
-    <span className="relative flex shrink-0 items-center px-1" title={STATUS_LABEL[status]}>
-      <UserButton>
-        <UserButton.MenuItems>
-          <UserButton.Action
-            label="Apagar meus dados da nuvem"
-            labelIcon={
-              <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-                <path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-            }
-            onClick={() => void eraseCloud()}
-          />
-        </UserButton.MenuItems>
-      </UserButton>
-      <span
-        aria-hidden="true"
-        className={`pointer-events-none absolute right-0.5 bottom-0 size-2.5 rounded-full border-2 border-surface-solid ${
-          status === "erro" ? "bg-red-500" : status === "sincronizando" ? "animate-pulse bg-amber-400" : "bg-emerald-500"
-        }`}
-      />
-      <span className="sr-only" role="status">
-        {STATUS_LABEL[status]}
-      </span>
+    <span ref={boxRef} className="relative flex shrink-0">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        aria-controls={menuId}
+        aria-label={`Sua conta (${name}). ${STATUS_LABEL[status]}`}
+        title={STATUS_LABEL[status]}
+        className="relative grid size-8 place-items-center rounded-full sm:size-9"
+      >
+        {photo ? (
+          <img src={photo} alt="" width={28} height={28} referrerPolicy="no-referrer" className="size-7 rounded-full" />
+        ) : (
+          <span className="grid size-7 place-items-center rounded-full bg-ink font-display text-xs font-bold text-bg">{name.charAt(0).toUpperCase()}</span>
+        )}
+        <span aria-hidden="true" className={`absolute right-0 bottom-0 size-2.5 rounded-full border-2 border-surface-solid ${dot}`} />
+      </button>
+
+      {open && (
+        <div id={menuId} className="absolute top-full right-0 z-50 mt-2 w-64 rounded-2xl border border-line bg-surface-solid p-2 text-sm shadow-xl">
+          <div className="px-2 py-1.5">
+            <p className="truncate font-semibold">{name}</p>
+            {email && <p className="truncate text-xs text-muted">{email}</p>}
+            <p className="mt-1.5 flex items-center gap-1.5 text-xs text-muted" role="status">
+              <span aria-hidden="true" className={`size-2 rounded-full ${dot}`} />
+              {STATUS_LABEL[status]}
+            </p>
+          </div>
+          <div className="my-1 h-px bg-line" />
+          <button type="button" onClick={() => void eraseCloud()} className="block w-full rounded-xl px-2 py-2 text-left text-red-600 hover:bg-line/60 dark:text-red-400">
+            Apagar meus dados da nuvem
+          </button>
+          <button type="button" onClick={() => void signOut()} className="block w-full rounded-xl px-2 py-2 text-left hover:bg-line/60">
+            Sair
+          </button>
+        </div>
+      )}
     </span>
   );
 }
