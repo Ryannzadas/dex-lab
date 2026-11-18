@@ -91,12 +91,15 @@ export function ProfileDialog({
   auth,
   user,
   teamIds,
+  teams,
   eraseCloudData,
   onClose,
 }: {
   auth: CloudAuth;
   user: User;
   teamIds: number[];
+  /** Times deste aparelho que podem ir para o perfil público. */
+  teams: { id: string; name: string; count: number }[];
   /** Apaga os times da nuvem (sem sair da conta). */
   eraseCloudData: () => Promise<void>;
   onClose: () => void;
@@ -163,17 +166,16 @@ export function ProfileDialog({
     }
   };
 
-  const avatarApi = async (method: "PUT" | "DELETE", body?: Blob) => {
+  const apiCall = async <T,>(path: string, method: "GET" | "PUT" | "DELETE", body?: Blob | string): Promise<T> => {
     const token = await auth.getToken();
     if (!token) throw new Error("app:Entre de novo para continuar.");
-    const res = await fetch("/api/avatar", {
-      method,
-      headers: { authorization: `Bearer ${token}`, ...(body ? { "content-type": body.type } : {}) },
-      body,
-    });
-    if (!res.ok) throw new Error(`app:${((await res.json().catch(() => null)) as { erro?: string } | null)?.erro ?? "Não deu para salvar a foto."}`);
-    return res.json() as Promise<{ url?: string }>;
+    const type = typeof body === "string" ? "application/json" : body?.type;
+    const res = await fetch(path, { method, headers: { authorization: `Bearer ${token}`, ...(type ? { "content-type": type } : {}) }, body });
+    const data = (await res.json().catch(() => null)) as (T & { erro?: string }) | null;
+    if (!res.ok) throw new Error(`app:${data?.erro ?? "Não deu para salvar agora. Tente de novo."}`);
+    return data as T;
   };
+  const avatarApi = (method: "PUT" | "DELETE", body?: Blob) => apiCall<{ url?: string }>("/api/avatar", method, body);
 
   /** Troca a foto; se a antiga era uma enviada pela pessoa, apaga do servidor. */
   const setPhoto = (photo: string | null, done: string) =>
@@ -256,6 +258,7 @@ export function ProfileDialog({
         auth.deleteAccount(user.hasPassword ? deletePw : undefined, async () => {
           await eraseCloudData();
           await avatarApi("DELETE").catch(() => {});
+          await apiCall("/api/perfil", "DELETE").catch(() => {});
         }),
       setDangerMsg,
     );
@@ -442,6 +445,8 @@ export function ProfileDialog({
           )}
         </Section>
 
+        <PublicProfileSection user={user} teams={teams} apiCall={apiCall} auth={auth} />
+
         <Section title="Dados e conta" danger>
           <div className="grid gap-2 text-sm">
             <button
@@ -462,7 +467,7 @@ export function ProfileDialog({
                 className="rounded-xl px-3 py-2.5 text-left text-red-600 transition hover:bg-red-500/10 disabled:opacity-50 dark:text-red-400"
               >
                 <span className="font-semibold">Excluir minha conta</span>
-                <span className="block text-xs opacity-80">Apaga a conta, a foto e os times da nuvem. Não dá para desfazer.</span>
+                <span className="block text-xs opacity-80">Apaga a conta, a foto, o perfil público e os times da nuvem. Não dá para desfazer.</span>
               </button>
             ) : (
               <form onSubmit={deleteAccount} className="grid gap-2 rounded-2xl border border-red-500/40 bg-red-500/5 p-3">
@@ -500,5 +505,256 @@ export function ProfileDialog({
         </Section>
       </div>
     </dialog>
+  );
+}
+
+type OwnProfile = { handle: string; name: string; photo: string | null; bio: string; teams: string[]; since: number };
+type ApiCall = <T>(path: string, method: "GET" | "PUT" | "DELETE", body?: Blob | string) => Promise<T>;
+
+/** "João Ryan" → "joao-ryan" (sugestão de nome para o link). */
+function slug(text: string) {
+  return text
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 20);
+}
+
+const publicName = (user: User) => user.displayName.trim().slice(0, 40) || "Treinador";
+const publicPhoto = (user: User) => (user.photo?.startsWith("https://") ? user.photo : null);
+
+function PublicProfileSection({
+  user,
+  teams,
+  apiCall,
+  auth,
+}: {
+  user: User;
+  teams: { id: string; name: string; count: number }[];
+  apiCall: ApiCall;
+  auth: CloudAuth;
+}) {
+  const [loaded, setLoaded] = useState(false);
+  const [profile, setProfile] = useState<OwnProfile | null>(null);
+  const [handle, setHandle] = useState("");
+  const [bio, setBio] = useState("");
+  const [chosen, setChosen] = useState<string[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<Feedback>(null);
+  const handleId = useId();
+  const bioId = useId();
+  const verified = user.emailVerified;
+  const suggestion = slug(user.displayName || user.email?.split("@")[0] || "");
+  const apiRef = useRef(apiCall);
+  useEffect(() => {
+    apiRef.current = apiCall;
+  });
+
+  // Carrega ao abrir (e de novo se o e-mail for confirmado com a janela aberta).
+  useEffect(() => {
+    if (!verified) return;
+    let alive = true;
+    apiRef
+      .current<OwnProfile | null>("/api/perfil", "GET")
+      .then((p) => {
+        if (!alive) return;
+        setProfile(p);
+        setHandle(p?.handle ?? suggestion);
+        setBio(p?.bio ?? "");
+        setChosen(p?.teams ?? []);
+        setLoaded(true);
+      })
+      .catch(() => alive && setMsg({ kind: "erro", text: "Não deu para carregar o perfil público agora." }));
+    return () => {
+      alive = false;
+    };
+  }, [verified, suggestion]);
+
+  // Mudou nome ou foto da conta: o perfil público acompanha.
+  const name = publicName(user);
+  const photo = publicPhoto(user);
+  useEffect(() => {
+    if (!profile || (profile.name === name && profile.photo === photo)) return;
+    apiRef
+      .current<OwnProfile>("/api/perfil", "PUT", JSON.stringify({ ...profile, name, photo }))
+      .then(setProfile)
+      .catch(() => {});
+  }, [profile, name, photo]);
+
+  if (!verified) {
+    const act = (task: () => Promise<void>) => {
+      setBusy(true);
+      setMsg(null);
+      task().finally(() => setBusy(false));
+    };
+    return (
+      <Section title="Perfil público">
+        <p className="text-sm text-muted">
+          Confirme seu e-mail para criar um perfil público com os seus times. O link de confirmação foi para {user.email}.
+        </p>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() =>
+              act(() =>
+                auth
+                  .sendVerification()
+                  .then(() => setMsg({ kind: "ok", text: "Link reenviado. Olhe também o spam." }))
+                  .catch(() => setMsg({ kind: "erro", text: "Não deu para reenviar agora. Tente daqui a pouco." })),
+              )
+            }
+            className={secondary}
+          >
+            Reenviar link
+          </button>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() =>
+              act(() =>
+                auth
+                  .reloadUser()
+                  .then((ok) => {
+                    if (!ok) setMsg({ kind: "erro", text: "Ainda não aparece como confirmado. Clique no link do e-mail e tente de novo." });
+                  })
+                  .catch(() => setMsg({ kind: "erro", text: "Não deu para verificar agora." })),
+              )
+            }
+            className={secondary}
+          >
+            Já confirmei
+          </button>
+        </div>
+        <Message feedback={msg} />
+      </Section>
+    );
+  }
+
+  const url = profile ? `${window.location.origin}/u/${profile.handle}` : null;
+  const dirty = !profile || profile.handle !== handle || profile.bio !== bio.trim() || profile.teams.join() !== chosen.join();
+  const fail = (e: Error) => setMsg({ kind: "erro", text: e.message.replace(/^app:/, "") });
+
+  const publish = (e: React.FormEvent) => {
+    e.preventDefault();
+    setBusy(true);
+    setMsg(null);
+    apiCall<OwnProfile>("/api/perfil", "PUT", JSON.stringify({ handle, bio, teams: chosen, name, photo }))
+      .then((p) => {
+        setMsg({ kind: "ok", text: profile ? "Perfil atualizado." : "Perfil no ar! Copie o link para mandar." });
+        setProfile(p);
+      })
+      .catch(fail)
+      .finally(() => setBusy(false));
+  };
+
+  const unpublish = () => {
+    if (!window.confirm("Tirar o perfil do ar? O link para de funcionar e o nome fica livre para outra pessoa.")) return;
+    setBusy(true);
+    apiCall("/api/perfil", "DELETE")
+      .then(() => {
+        setProfile(null);
+        setMsg({ kind: "ok", text: "Perfil tirado do ar." });
+      })
+      .catch(fail)
+      .finally(() => setBusy(false));
+  };
+
+  const copy = () => {
+    if (!url) return;
+    navigator.clipboard
+      .writeText(url)
+      .then(() => setMsg({ kind: "ok", text: "Link copiado." }))
+      .catch(() => setMsg({ kind: "ok", text: url }));
+  };
+
+  return (
+    <Section title="Perfil público">
+      {!loaded ? (
+        !msg && <p className="text-sm text-muted">Carregando…</p>
+      ) : (
+        <form onSubmit={publish} className="grid gap-3">
+          <p className="text-sm text-muted">
+            Uma página com seu nome, sua foto e os times que você escolher, para mandar para os amigos. Seu e-mail não aparece.
+          </p>
+          <div className="grid gap-1 text-sm font-medium">
+            <label htmlFor={handleId}>Link</label>
+            <div className="flex items-center rounded-xl border border-line bg-bg text-base transition focus-within:border-ink sm:text-sm">
+              <span className="shrink-0 pl-3 text-muted select-none">/u/</span>
+              <input
+                id={handleId}
+                value={handle}
+                onChange={(e) => setHandle(e.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, "").slice(0, 20))}
+                required
+                minLength={3}
+                maxLength={20}
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
+                placeholder="seu-nome"
+                className="w-full bg-transparent py-2.5 pr-3 pl-0.5 outline-none"
+              />
+            </div>
+          </div>
+          <div className="grid gap-1 text-sm font-medium">
+            <label htmlFor={bioId}>
+              Sobre você <span className="font-normal text-muted">(opcional)</span>
+            </label>
+            <textarea
+              id={bioId}
+              value={bio}
+              onChange={(e) => setBio(e.target.value.slice(0, 160))}
+              rows={2}
+              placeholder="Ex.: fã de tipo Dragão, jogando Scarlet"
+              className={`${input} resize-none`}
+            />
+          </div>
+          <fieldset className="grid gap-1.5">
+            <legend className="mb-1.5 text-sm font-medium">Times que aparecem</legend>
+            {teams.length === 0 && <p className="text-sm text-muted">Monte um time primeiro.</p>}
+            {teams.map((t) => (
+              <label key={t.id} className="flex cursor-pointer items-center gap-2.5 rounded-xl border border-line px-3 py-2 text-sm transition hover:border-ink">
+                <input
+                  type="checkbox"
+                  checked={chosen.includes(t.id)}
+                  onChange={(e) => setChosen((c) => (e.target.checked ? [...c, t.id] : c.filter((id) => id !== t.id)))}
+                  className="size-4 accent-current"
+                />
+                <span className="min-w-0 flex-1 truncate font-medium">{t.name}</span>
+                <span className="shrink-0 text-xs text-muted">{t.count} Pokémon</span>
+              </label>
+            ))}
+          </fieldset>
+          <div className="flex flex-wrap gap-2">
+            <button type="submit" disabled={busy || !dirty} className={primary}>
+              {busy ? "Salvando…" : profile ? "Salvar" : "Publicar perfil"}
+            </button>
+            {url && (
+              <>
+                <button type="button" onClick={copy} className={secondary}>
+                  Copiar link
+                </button>
+                <a href={url} target="_blank" rel="noopener" className={secondary}>
+                  Ver perfil
+                </a>
+              </>
+            )}
+          </div>
+          {profile && (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={unpublish}
+              className="justify-self-start text-sm text-muted underline-offset-2 hover:text-ink hover:underline"
+            >
+              Tirar do ar
+            </button>
+          )}
+        </form>
+      )}
+      <Message feedback={msg} />
+    </Section>
   );
 }

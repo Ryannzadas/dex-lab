@@ -1,7 +1,7 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import "./index.css"
-import App from "./App"
+import Root from "./root"
 
 // Quando um novo Service Worker assume, recarrega a página para aplicar a atualização na hora.
 if ("serviceWorker" in navigator) {
@@ -15,6 +15,6 @@ if ("serviceWorker" in navigator) {
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <App />
+    <Root />
   </StrictMode>,
 )

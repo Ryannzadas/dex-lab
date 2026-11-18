@@ -54,6 +54,14 @@ function decode(text: string): unknown {
   return JSON.parse(new TextDecoder().decode(Uint8Array.from(bin, (c) => c.charCodeAt(0))));
 }
 
+/** Endereço que abre este time no app (o mesmo formato do link de compartilhar). */
+export function teamLink(team: { members: Member[]; game: string | null }) {
+  const params = new URLSearchParams({ aba: "time", time: team.members.map((m) => m.id).join(",") });
+  if (team.members.some(isCustomized)) params.set("sets", encode(team.members.map((m) => (isCustomized(m) ? { ...m, id: undefined } : 0))));
+  if (team.game) params.set("jogo", team.game);
+  return `/?${params}`;
+}
+
 /** Aceita só os campos conhecidos, com tipos certos (o link pode vir de qualquer lugar). */
 function sanitize(raw: unknown, id: number): Member {
   const m = newMember(id);

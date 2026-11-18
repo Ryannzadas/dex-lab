@@ -11,6 +11,11 @@ export function json(body: unknown, status = 200) {
 
 /** Confere o token do Firebase (assinatura, projeto, emissor, validade) e devolve o id da conta. */
 export async function userIdOf(request: Request): Promise<string | null> {
+  return (await tokenOf(request))?.uid ?? null;
+}
+
+/** Como userIdOf, mas também diz se o e-mail da conta está confirmado. */
+export async function tokenOf(request: Request): Promise<{ uid: string; emailVerified: boolean } | null> {
   const token = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
   if (!token || !PROJECT_ID) return null;
   try {
@@ -21,7 +26,7 @@ export async function userIdOf(request: Request): Promise<string | null> {
     });
     const authTime = typeof payload.auth_time === "number" ? payload.auth_time : 0;
     if (typeof payload.sub !== "string" || !payload.sub || authTime > Date.now() / 1000 + 60) return null;
-    return payload.sub;
+    return { uid: payload.sub, emailVerified: payload.email_verified === true };
   } catch {
     return null;
   }

@@ -9,6 +9,7 @@ import {
   onAuthStateChanged,
   reauthenticateWithCredential,
   reauthenticateWithPopup,
+  sendEmailVerification,
   sendPasswordResetEmail,
   signInWithEmailAndPassword,
   signInWithPopup,
@@ -57,6 +58,8 @@ async function signInWithGoogle() {
 
 async function signUpWithEmail(name: string, email: string, password: string) {
   const { user } = await createUserWithEmailAndPassword(auth, email, password);
+  // Link de confirmação; depois de confirmar, o Firebase oferece voltar para o app.
+  await sendEmailVerification(user, { url: window.location.origin }).catch(() => {});
   if (name) {
     await updateProfile(user, { displayName: name });
     // O onAuthStateChanged já disparou sem o nome; recarrega para o menu mostrar o nome.
@@ -102,6 +105,7 @@ export default function CloudRoot({ api }: { api: TeamsApi }) {
           hasPassword: user.providerData.some((p) => p.providerId === "password"),
           hasGoogle: user.providerData.some((p) => p.providerId === "google.com"),
           createdAt: user.metadata.creationTime ?? null,
+          emailVerified: user.emailVerified,
         }
       : null,
     getToken: async () => (auth.currentUser ? auth.currentUser.getIdToken() : null),
@@ -122,6 +126,18 @@ export default function CloudRoot({ api }: { api: TeamsApi }) {
         ...(changes.photo !== undefined ? { photoURL: changes.photo } : {}),
       });
       refresh();
+    },
+    sendVerification: async () => {
+      if (auth.currentUser) await sendEmailVerification(auth.currentUser, { url: window.location.origin });
+    },
+    reloadUser: async () => {
+      const current = auth.currentUser;
+      if (!current) return false;
+      await current.reload();
+      // Token novo, para o servidor também saber que o e-mail foi confirmado.
+      if (current.emailVerified) await current.getIdToken(true);
+      refresh();
+      return current.emailVerified;
     },
     changePassword: async (current, next) => {
       await reauth(current);

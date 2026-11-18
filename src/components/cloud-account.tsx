@@ -19,6 +19,7 @@ export type CloudAuth = {
     hasPassword: boolean;
     hasGoogle: boolean;
     createdAt: string | null;
+    emailVerified: boolean;
   } | null;
   getToken: () => Promise<string | null>;
   signInGoogle: () => Promise<void>;
@@ -26,6 +27,9 @@ export type CloudAuth = {
   signUpEmail: (name: string, email: string, password: string) => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
   updateProfile: (changes: { name?: string; photo?: string | null }) => Promise<void>;
+  sendVerification: () => Promise<void>;
+  /** Busca a conta de novo (ex.: depois de confirmar o e-mail em outra aba). Devolve se o e-mail está confirmado. */
+  reloadUser: () => Promise<boolean>;
   changePassword: (current: string, next: string) => Promise<void>;
   /** Confirma a identidade (senha, ou Google se a conta não tiver senha), roda `beforeDelete` e exclui a conta. */
   deleteAccount: (password: string | undefined, beforeDelete: () => Promise<void>) => Promise<void>;
@@ -55,6 +59,7 @@ export function CloudAccount({ api, auth }: { api: TeamsApi; auth: CloudAuth }) 
   const [open, setOpen] = useState(false);
   const [signingIn, setSigningIn] = useState(false);
   const [editing, setEditing] = useState(false);
+  const [verifyMsg, setVerifyMsg] = useState<string | null>(null);
   const menuId = useId();
   const boxRef = useRef<HTMLSpanElement>(null);
   const apiRef = useRef(api);
@@ -127,7 +132,10 @@ export function CloudAccount({ api, auth }: { api: TeamsApi; auth: CloudAuth }) 
   useEffect(() => {
     if (!uid) return;
     const pull = () => {
-      if (document.visibilityState !== "visible" || !ready.current) return;
+      if (document.visibilityState !== "visible") return;
+      // Confirmou o e-mail em outra aba? Atualiza a conta ao voltar.
+      if (authRef.current.user && !authRef.current.user.emailVerified) void authRef.current.reloadUser().catch(() => {});
+      if (!ready.current) return;
       call("GET")
         .then((cloud) => {
           absorb(cloud);
@@ -198,12 +206,17 @@ export function CloudAccount({ api, auth }: { api: TeamsApi; auth: CloudAuth }) 
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
         aria-controls={menuId}
-        aria-label={`Sua conta (${name}). ${STATUS_LABEL[status]}`}
+        aria-label={`Sua conta (${name}). ${STATUS_LABEL[status]}${auth.user.emailVerified ? "" : " E-mail ainda não confirmado."}`}
         title={STATUS_LABEL[status]}
         className="relative grid size-8 place-items-center rounded-full sm:size-9"
       >
         <Avatar user={auth.user} size={28} />
         <span aria-hidden="true" className={`absolute right-0 bottom-0 size-2.5 rounded-full border-2 border-surface-solid ${dot}`} />
+        {!auth.user.emailVerified && (
+          <span aria-hidden="true" className="absolute -top-0.5 -right-0.5 grid size-3.5 place-items-center rounded-full bg-amber-400 text-[9px] font-bold text-black">
+            !
+          </span>
+        )}
       </button>
 
       {open && (
@@ -216,6 +229,24 @@ export function CloudAccount({ api, auth }: { api: TeamsApi; auth: CloudAuth }) 
               {STATUS_LABEL[status]}
             </p>
           </div>
+          {!auth.user.emailVerified && (
+            <div className="mx-1 mt-1 rounded-xl bg-amber-400/15 px-2.5 py-2 text-xs">
+              <p className="font-semibold">Confirme seu e-mail</p>
+              <p className="mt-0.5 text-muted">{verifyMsg ?? "Mandamos um link para o seu e-mail. Olhe também o spam."}</p>
+              <button
+                type="button"
+                onClick={() =>
+                  void auth
+                    .sendVerification()
+                    .then(() => setVerifyMsg("Link reenviado. Depois de clicar nele, volte para cá."))
+                    .catch(() => setVerifyMsg("Não deu para reenviar agora. Tente daqui a pouco."))
+                }
+                className="mt-1.5 font-semibold underline underline-offset-2"
+              >
+                Reenviar link
+              </button>
+            </div>
+          )}
           <div className="my-1 h-px bg-line" />
           <button
             type="button"
@@ -238,6 +269,7 @@ export function CloudAccount({ api, auth }: { api: TeamsApi; auth: CloudAuth }) 
           auth={auth}
           user={auth.user}
           teamIds={api.ids}
+          teams={api.teams.filter((t) => t.members.length > 0).map((t) => ({ id: t.id, name: t.name, count: t.members.length }))}
           eraseCloudData={async () => {
             await call("DELETE");
           }}

@@ -363,7 +363,7 @@ function Toolbar({
   );
 }
 
-function Footer({ dark }: { dark: boolean }) {
+export function Footer({ dark }: { dark: boolean }) {
   return (
     <footer className="border-t border-line">
       <div className="mx-auto flex max-w-6xl flex-col gap-5 px-4 py-8 text-sm text-muted sm:flex-row sm:items-center sm:justify-between sm:px-6">
