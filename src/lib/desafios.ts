@@ -65,10 +65,14 @@ const WEEK = 7 * 24 * 60 * 60 * 1000;
 /** Segunda-feira, 5/1/2026, 00:00 em Brasília (03:00 UTC). */
 const EPOCH = Date.UTC(2026, 0, 5, 3);
 
-export function challengeOfWeek(now = Date.now()) {
-  const index = Math.floor((now - EPOCH) / WEEK);
+/** O desafio da semana de número `index` (semana 0 = a que começou em 5/1/2026). */
+export function challengeForIndex(index: number) {
   const challenge = CHALLENGES[((index % CHALLENGES.length) + CHALLENGES.length) % CHALLENGES.length];
-  return { challenge, week: `s${index}`, startsAt: EPOCH + index * WEEK, endsAt: EPOCH + (index + 1) * WEEK };
+  return { challenge, index, week: `s${index}`, startsAt: EPOCH + index * WEEK, endsAt: EPOCH + (index + 1) * WEEK };
+}
+
+export function challengeOfWeek(now = Date.now()) {
+  return challengeForIndex(Math.floor((now - EPOCH) / WEEK));
 }
 
 /** Confere um time completo contra a regra. Devolve os problemas em português (vazio = cumpre). */

@@ -1,6 +1,7 @@
 import type { SyncData } from "../src/lib/sync-merge.js";
 import { json, PROJECT_ID, tokenOf } from "./_auth.js";
 import { isOffensive } from "./_filtro.js";
+import { isBlocked } from "./_moderacao.js";
 import { getRedis } from "./_redis.js";
 
 /**
@@ -11,7 +12,8 @@ import { getRedis } from "./_redis.js";
  */
 
 export type PublicTeam = { name: string; game: string | null; members: SyncData["teams"][number]["members"] };
-export type PublicProfile = { handle: string; name: string; photo: string | null; bio: string; since: number; teams: PublicTeam[]; seguidores: number };
+export type Title = { titulo: string; semana: string; termina: number };
+export type PublicProfile = { handle: string; name: string; photo: string | null; bio: string; since: number; teams: PublicTeam[]; seguidores: number; titulos: Title[] };
 type Stored = { handle: string; name: string; photo: string | null; bio: string; teams: string[]; since: number };
 
 export const HANDLE_RE = /^[a-z0-9][a-z0-9_-]{2,19}$/;
@@ -32,15 +34,20 @@ export async function GET(request: Request) {
     if (!HANDLE_RE.test(handle)) return json({ erro: "Perfil não encontrado." }, 404);
     const uid = await redis.get<string>(handleKey(handle));
     const stored = uid ? parse<Stored>(await redis.get(ownKey(uid))) : null;
-    if (!uid || !stored) return json({ erro: "Perfil não encontrado." }, 404);
-    const [rawTimes, seguidores] = await Promise.all([redis.get(timesKey(uid)), redis.scard(`dexlab:seguidores:${uid}`)]);
+    if (!uid || !stored || (await isBlocked(redis, uid))) return json({ erro: "Perfil não encontrado." }, 404);
+    const [rawTimes, seguidores, rawTitles] = await Promise.all([
+      redis.get(timesKey(uid)),
+      redis.scard(`dexlab:seguidores:${uid}`),
+      redis.smembers(`dexlab:titulos:${uid}`),
+    ]);
+    const titulos = rawTitles.flatMap((raw) => parse<Title>(raw) ?? []).sort((a, b) => b.termina - a.termina);
     const times = parse<SyncData>(rawTimes);
     const byId = new Map((times?.teams ?? []).map((t) => [t.id, t]));
     const teams: PublicTeam[] = stored.teams
       .map((id) => byId.get(id))
       .filter((t) => !!t && t.members.length > 0)
       .map((t) => ({ name: t!.name, game: t!.game ?? null, members: t!.members }));
-    const body: PublicProfile = { handle: stored.handle, name: stored.name, photo: stored.photo, bio: stored.bio, since: stored.since, teams, seguidores };
+    const body: PublicProfile = { handle: stored.handle, name: stored.name, photo: stored.photo, bio: stored.bio, since: stored.since, teams, seguidores, titulos };
     return Response.json(body, { headers: { "cache-control": "public, s-maxage=30, stale-while-revalidate=300" } });
   }
 
@@ -55,6 +62,7 @@ export async function PUT(request: Request) {
   const token = await tokenOf(request);
   if (!token) return json({ erro: "Entre com sua conta." }, 401);
   if (!token.emailVerified) return json({ erro: "Confirme seu e-mail antes de publicar o perfil." }, 403);
+  if (await isBlocked(redis, token.uid)) return json({ erro: "Sua conta não pode ter perfil público." }, 403);
 
   let body: Record<string, unknown>;
   try {
@@ -102,5 +110,7 @@ export async function DELETE(request: Request) {
   const previous = parse<Stored>(await redis.get(ownKey(token.uid)));
   if (previous?.handle) await redis.del(handleKey(previous.handle));
   await redis.del(ownKey(token.uid));
+  // Excluindo a conta (?conta=1): os selos de campeão também saem.
+  if (new URL(request.url).searchParams.has("conta")) await redis.del(`dexlab:titulos:${token.uid}`);
   return json({ ok: true });
 }

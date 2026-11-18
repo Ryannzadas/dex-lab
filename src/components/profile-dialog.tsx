@@ -258,7 +258,7 @@ export function ProfileDialog({
         auth.deleteAccount(user.hasPassword ? deletePw : undefined, async () => {
           await eraseCloudData();
           await avatarApi("DELETE").catch(() => {});
-          await apiCall("/api/perfil", "DELETE").catch(() => {});
+          await apiCall("/api/perfil?conta=1", "DELETE").catch(() => {});
           await apiCall("/api/seguir", "DELETE").catch(() => {});
         }),
       setDangerMsg,

@@ -5,6 +5,7 @@ import { gameById } from "../src/lib/games.js";
 import type { SyncData } from "../src/lib/sync-merge.js";
 import { TYPE_INFO, type TypeName } from "../src/lib/types.js";
 import { isOffensive } from "./_filtro.js";
+import { isBlocked } from "./_moderacao.js";
 import { getRedis } from "./_redis.js";
 
 /**
@@ -89,7 +90,7 @@ async function profileCard(handle: string, origin: string): Promise<Card | null>
   const redis = getRedis();
   if (!redis || !/^[a-z0-9][a-z0-9_-]{2,19}$/.test(handle)) return null;
   const uid = await redis.get<string>(`dexlab:perfil:nome:${handle}`);
-  if (!uid) return null;
+  if (!uid || (await isBlocked(redis, uid))) return null;
   const [rawProfile, rawTimes] = await redis.mget<unknown[]>(`dexlab:perfil:uid:${uid}`, `dexlab:times:fb:${uid}`);
   const parse = <T>(raw: unknown) => (typeof raw === "string" ? (JSON.parse(raw) as T) : (raw as T | null));
   const profile = parse<{ name: string; photo: string | null; bio: string; teams: string[] }>(rawProfile);

@@ -1,6 +1,7 @@
 import type { SyncData } from "../src/lib/sync-merge.js";
 import { json, PROJECT_ID, tokenOf } from "./_auth.js";
 import { isOffensive } from "./_filtro.js";
+import { isHidden, loadModeration } from "./_moderacao.js";
 import { getRedis } from "./_redis.js";
 
 /**
@@ -22,7 +23,6 @@ export type VitrineEntry = {
   atualizado: number;
 };
 
-const HIDE_AFTER_REPORTS = 3;
 const DAY = 24 * 60 * 60;
 const K = {
   profile: (uid: string) => `dexlab:perfil:uid:${uid}`,
@@ -66,6 +66,7 @@ export async function GET(request: Request) {
   } while (String(cursor) !== "0" && keys.length < 2000);
   if (keys.length === 0) return cached({ times: [] });
 
+  const mod = await loadModeration(redis);
   const uids = keys.map((k) => k.slice("dexlab:perfil:uid:".length));
   const [profiles, allTimes] = await Promise.all([redis.mget<unknown[]>(...keys), redis.mget<unknown[]>(...uids.map(K.times))]);
 
@@ -73,7 +74,7 @@ export async function GET(request: Request) {
   uids.forEach((uid, i) => {
     const profile = parse<Profile>(profiles[i]);
     const times = parse<SyncData>(allTimes[i]);
-    if (!profile || !times || isOffensive(profile.name, profile.bio, profile.handle)) return;
+    if (!profile || !times || mod.blocked.has(uid) || isOffensive(profile.name, profile.bio, profile.handle)) return;
     const byId = new Map(times.teams.map((t) => [t.id, t]));
     for (const teamId of profile.teams) {
       const team = byId.get(teamId);
@@ -92,7 +93,7 @@ export async function GET(request: Request) {
 
   const entries: VitrineEntry[] = [];
   found.forEach((f, i) => {
-    if ((numbers[i * 2 + 1] ?? 0) >= HIDE_AFTER_REPORTS) return;
+    if (isHidden(mod, ids[i], numbers[i * 2 + 1] ?? 0)) return;
     entries.push({
       id: ids[i],
       handle: f.profile.handle,

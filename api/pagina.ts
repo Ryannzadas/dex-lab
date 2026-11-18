@@ -1,5 +1,6 @@
 import { gameById } from "../src/lib/games.js";
 import { isOffensive } from "./_filtro.js";
+import { isBlocked } from "./_moderacao.js";
 import { getRedis } from "./_redis.js";
 
 /**
@@ -43,7 +44,7 @@ export async function GET(request: Request) {
     pageUrl = `${origin}/u/${handle}`;
     const redis = getRedis();
     const uid = redis ? await redis.get<string>(`dexlab:perfil:nome:${handle}`) : null;
-    const raw = uid ? await redis!.get(`dexlab:perfil:uid:${uid}`) : null;
+    const raw = uid && !(await isBlocked(redis!, uid)) ? await redis!.get(`dexlab:perfil:uid:${uid}`) : null;
     const profile = (typeof raw === "string" ? JSON.parse(raw) : raw) as { name: string; bio: string; teams: string[] } | null;
     if (profile && !isOffensive(profile.name, profile.bio)) {
       title = `${profile.name} (@${handle}) · Dex Lab`;

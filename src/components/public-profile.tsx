@@ -12,7 +12,7 @@ import { MatchupDialog, type OtherTeam } from "./matchup";
 import { Avatar } from "./profile-dialog";
 
 type PublicTeam = { name: string; game: string | null; members: Member[] };
-type PublicProfile = { handle: string; name: string; photo: string | null; bio: string; since: number; teams: PublicTeam[]; seguidores?: number };
+type PublicProfile = { handle: string; name: string; photo: string | null; bio: string; since: number; teams: PublicTeam[]; seguidores?: number; titulos?: { titulo: string; semana: string; termina: number }[] };
 
 // Botão de conta (login), o mesmo do app; carrega à parte.
 const CloudRoot = lazy(() => import("./cloud-root"));
@@ -121,6 +121,19 @@ export default function PublicProfilePage({ handle }: { handle: string }) {
                   ))}
                   <span className="rounded-lg border border-line bg-surface px-2.5 py-1 text-muted backdrop-blur-xl">desde {since}</span>
                 </div>
+                {!!profile.titulos?.length && (
+                  <ul className="mt-3 flex flex-wrap gap-2" aria-label="Títulos">
+                    {profile.titulos.map((t) => (
+                      <li
+                        key={t.semana}
+                        className="rounded-full border border-amber-400/60 bg-amber-400/15 px-3 py-1 text-sm font-semibold text-amber-700 dark:text-amber-300"
+                        title={`Campeão do desafio da semana até ${new Date(t.termina - 1).toLocaleDateString("pt-BR")}`}
+                      >
+                        🏆 Campeão · {t.titulo}
+                      </li>
+                    ))}
+                  </ul>
+                )}
                 <FollowButton handle={profile.handle} initial={profile.seguidores ?? 0} />
               </div>
             </section>

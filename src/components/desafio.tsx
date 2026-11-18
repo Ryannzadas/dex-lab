@@ -3,14 +3,16 @@ import { ArrowIcon, CustomSelect, type SelectOption } from "@/components/ui";
 import { useCloudSession } from "@/lib/cloud-session";
 import { checkMonOf, post } from "@/lib/community";
 import { challengeOfWeek, checkTeam, timeLeft } from "@/lib/desafios";
-import { getPokemonList, pokemonName, type Pokemon } from "@/lib/pokeapi";
+import { artworkUrl, getPokemonList, pokemonName, type Pokemon } from "@/lib/pokeapi";
 import { teamLink, type Member, type TeamsApi } from "@/lib/team";
 import { usePokemons } from "@/lib/use-pokemon";
 import { MatchupDialog, type OtherTeam } from "./matchup";
+import { Avatar } from "./profile-dialog";
 import { ShowcaseCard, type ShowcaseEntry } from "./showcase-card";
 
 type Entrada = ShowcaseEntry & { em: number };
-type Data = { desafio: { titulo: string; descricao: string; termina: number }; entradas: Entrada[] };
+type Campeao = { semana: string; titulo: string; termina: number; handle: string; name: string; photo: string | null; team: { name: string; game: string | null; members: Member[] }; curtidas: number };
+type Data = { desafio: { titulo: string; descricao: string; termina: number }; entradas: Entrada[]; campeoes?: Campeao[] };
 
 /** Tela do desafio da semana dentro da vitrine: regra, inscrição e ranking. */
 export function DesafioView({ loginAvailable, teams, onTitle }: { loginAvailable: boolean; teams: TeamsApi; onTitle: (title: string) => void }) {
@@ -175,8 +177,50 @@ export function DesafioView({ loginAvailable, teams, onTitle }: { loginAvailable
           ))}
         </div>
       )}
+      {!!data?.campeoes?.length && <Champions list={data.campeoes} />}
       {comparing && <MatchupDialog mine={teams} other={comparing} onClose={() => setComparing(null)} />}
     </div>
+  );
+}
+
+/** Histórico: o time mais curtido de cada semana que já fechou. */
+function Champions({ list }: { list: Campeao[] }) {
+  return (
+    <section className="mt-12" aria-labelledby="campeoes-titulo">
+      <p className="font-mono text-[11px] tracking-[0.18em] text-muted uppercase">{"{ hall da fama }"}</p>
+      <h3 id="campeoes-titulo" className="mt-1 mb-4 font-display text-2xl font-bold tracking-tight">
+        Campeões anteriores
+      </h3>
+      <ol className="grid gap-3 md:grid-cols-2">
+        {list.map((c) => (
+          <li key={c.semana} className="flex items-center gap-4 rounded-2xl border border-line bg-surface p-3.5 backdrop-blur-xl">
+            <span className="grid size-11 shrink-0 place-items-center rounded-xl border border-amber-400/60 bg-amber-400/15 text-xl" aria-hidden="true">
+              🏆
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-xs text-muted">
+                {c.titulo} · semana até {new Date(c.termina - 1).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })}
+              </p>
+              <p className="truncate font-semibold">{c.team.name}</p>
+              <a href={`/u/${c.handle}`} className="flex items-center gap-1.5 text-sm text-muted hover:text-ink">
+                <Avatar user={c} size={18} />
+                <span className="truncate">
+                  {c.name} · @{c.handle}
+                </span>
+              </a>
+            </div>
+            <div className="hidden shrink-0 -space-x-3 sm:flex">
+              {c.team.members.slice(0, 6).map((m, i) => (
+                <img key={i} src={artworkUrl(m.id, m.shiny)} alt="" width={36} height={36} loading="lazy" className="size-9 object-contain drop-shadow" />
+              ))}
+            </div>
+            <span className="shrink-0 font-mono text-sm" aria-label={`${c.curtidas} curtidas`}>
+              ♥ {c.curtidas}
+            </span>
+          </li>
+        ))}
+      </ol>
+    </section>
   );
 }
 

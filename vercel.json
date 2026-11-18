@@ -1,6 +1,16 @@
 {
   "rewrites": [
-    { "source": "/u/:handle", "destination": "/api/pagina?h=:handle" },
-    { "source": "/t", "destination": "/api/pagina" }
+    {
+      "source": "/u/:handle",
+      "destination": "/api/pagina?h=:handle"
+    },
+    {
+      "source": "/t",
+      "destination": "/api/pagina"
+    },
+    {
+      "source": "/admin",
+      "destination": "/index.html"
+    }
   ]
 }

@@ -1,7 +1,8 @@
-import { challengeOfWeek, checkTeam, type CheckMon } from "../src/lib/desafios.js";
+import { challengeForIndex, challengeOfWeek, checkTeam, type CheckMon } from "../src/lib/desafios.js";
 import type { SyncData } from "../src/lib/sync-merge.js";
 import { json, PROJECT_ID, tokenOf } from "./_auth.js";
 import { isOffensive } from "./_filtro.js";
+import { isBlocked, isHidden, loadModeration, type Moderation } from "./_moderacao.js";
 import { getRedis } from "./_redis.js";
 
 /**
@@ -9,6 +10,8 @@ import { getRedis } from "./_redis.js";
  * GET: o desafio e os times inscritos (com curtidas). GET ?minhas=1 (login): o que eu curti e minha inscrição.
  * POST { acao: "participar", time } (login, e-mail confirmado, perfil público): confere a regra e guarda uma cópia do time.
  * POST { acao: "sair" }, { acao: "curtir", id }, { acao: "denunciar", id, motivo }.
+ * Quando a semana fecha, o time com mais curtidas (pelo menos 1) vira campeão: ganha um selo
+ * no perfil e entra no histórico. Isso é calculado na primeira visita depois do fechamento.
  */
 
 type Profile = { handle: string; name: string; photo: string | null };
@@ -16,7 +19,6 @@ type Team = Omit<SyncData["teams"][number], "members"> & { members: { id: number
 type Stored = { handle: string; name: string; photo: string | null; team: { name: string; game: string | null; members: Team["members"] }; em: number };
 
 const KEEP = 60 * 24 * 60 * 60; // as chaves de cada semana somem depois de 60 dias
-const HIDE_AFTER_REPORTS = 3;
 const K = {
   entries: (week: string) => `dexlab:desafio:${week}:entradas`,
   likes: (week: string, id: string) => `dexlab:desafio:${week}:curtidas:${id}`,
@@ -24,6 +26,9 @@ const K = {
   reporters: (week: string, id: string) => `dexlab:desafio:${week}:denuncias:${id}`,
   reports: "dexlab:denuncias",
   profile: (uid: string) => `dexlab:perfil:uid:${uid}`,
+  champion: (week: string) => `dexlab:desafio:${week}:campeao`,
+  champions: "dexlab:campeoes",
+  titles: (uid: string) => `dexlab:titulos:${uid}`,
   times: (uid: string) => `dexlab:times:fb:${uid}`,
 };
 
@@ -56,10 +61,71 @@ function monData(id: number) {
   return hit;
 }
 
+type Redis = NonNullable<ReturnType<typeof getRedis>>;
+type Ranked = Stored & { id: string; uid: string; curtidas: number };
+export type Champion = { semana: string; titulo: string; termina: number; handle: string; name: string; photo: string | null; team: Stored["team"]; curtidas: number };
+
+/** Inscrições de uma semana, sem as escondidas, da mais curtida para a menos. */
+async function ranked(redis: Redis, week: string, mod: Moderation): Promise<Ranked[]> {
+  const all = (await redis.hgetall<Record<string, unknown>>(K.entries(week))) ?? {};
+  const uids = Object.keys(all).filter((uid) => !mod.blocked.has(uid));
+  const ids = await Promise.all(uids.map((uid) => entryId(week, uid)));
+  const counts = redis.pipeline();
+  ids.forEach((id) => {
+    counts.scard(K.likes(week, id));
+    counts.scard(K.reporters(week, id));
+  });
+  const numbers = ids.length ? await counts.exec<number[]>() : [];
+  return uids
+    .map((uid, i) => ({ uid, id: ids[i], stored: parse<Stored>(all[uid]), curtidas: numbers[i * 2] ?? 0, denuncias: numbers[i * 2 + 1] ?? 0 }))
+    .filter((e) => e.stored && !isHidden(mod, e.id, e.denuncias) && !isOffensive(e.stored.team.name, e.stored.name, e.stored.handle))
+    .map((e) => ({ ...e.stored!, id: e.id, uid: e.uid, curtidas: e.curtidas }))
+    .sort((a, b) => b.curtidas - a.curtidas || a.em - b.em);
+}
+
+/** Fecha as últimas semanas que ainda não têm campeão (só uma função faz isso de cada vez). */
+async function settleChampions(redis: Redis, currentIndex: number, mod: Moderation) {
+  for (let index = currentIndex - 4; index < currentIndex; index++) {
+    const past = challengeForIndex(index);
+    if (index < 0 || (await redis.exists(K.champion(past.week)))) continue;
+    if (!(await redis.set(`${K.champion(past.week)}:trava`, 1, { nx: true, ex: 60 }))) continue;
+    const top = (await ranked(redis, past.week, mod))[0];
+    if (!top || top.curtidas < 1) {
+      await redis.set(K.champion(past.week), JSON.stringify({ vazio: true }));
+      continue;
+    }
+    const champion: Champion & { uid: string } = {
+      semana: past.week,
+      titulo: past.challenge.title,
+      termina: past.endsAt,
+      uid: top.uid,
+      handle: top.handle,
+      name: top.name,
+      photo: top.photo,
+      team: top.team,
+      curtidas: top.curtidas,
+    };
+    await redis.set(K.champion(past.week), JSON.stringify(champion));
+    await redis.lpush(K.champions, JSON.stringify(champion));
+    await redis.ltrim(K.champions, 0, 199);
+    await redis.sadd(K.titles(top.uid), JSON.stringify({ titulo: past.challenge.title, semana: past.week, termina: past.endsAt }));
+  }
+}
+
+/** Últimos campeões, sem quem saiu do app ou foi bloqueado. */
+async function champions(redis: Redis, mod: Moderation): Promise<Champion[]> {
+  const list = (await redis.lrange(K.champions, 0, 19))
+    .map((raw) => parse<Champion & { uid: string }>(raw))
+    .filter((c): c is Champion & { uid: string } => !!c && !mod.blocked.has(c.uid));
+  if (!list.length) return [];
+  const profiles = await redis.mget<unknown[]>(...list.map((c) => K.profile(c.uid)));
+  return list.filter((_, i) => profiles[i]).map(({ uid: _uid, ...c }) => c as Champion);
+}
+
 export async function GET(request: Request) {
   const redis = getRedis();
   if (!redis || !PROJECT_ID) return json({ erro: "Desafio indisponível." }, 503);
-  const { challenge, week, endsAt } = challengeOfWeek();
+  const { challenge, week, endsAt, index } = challengeOfWeek();
   const desafio = { id: challenge.id, titulo: challenge.title, descricao: challenge.description, semana: week, termina: endsAt };
 
   if (new URL(request.url).searchParams.has("minhas")) {
@@ -69,23 +135,11 @@ export async function GET(request: Request) {
     return json({ curtidas, minha: minha ? await entryId(week, token.uid) : null });
   }
 
-  const all = (await redis.hgetall<Record<string, unknown>>(K.entries(week))) ?? {};
-  const uids = Object.keys(all);
-  const ids = await Promise.all(uids.map((uid) => entryId(week, uid)));
-  const counts = redis.pipeline();
-  ids.forEach((id) => {
-    counts.scard(K.likes(week, id));
-    counts.scard(K.reporters(week, id));
-  });
-  const numbers = ids.length ? await counts.exec<number[]>() : [];
-
-  const entradas = uids
-    .map((uid, i) => ({ id: ids[i], stored: parse<Stored>(all[uid]), curtidas: numbers[i * 2] ?? 0, denuncias: numbers[i * 2 + 1] ?? 0 }))
-    .filter((e) => e.stored && e.denuncias < HIDE_AFTER_REPORTS && !isOffensive(e.stored.team.name, e.stored.name, e.stored.handle))
-    .map((e) => ({ id: e.id, ...e.stored!, curtidas: e.curtidas }))
-    .sort((a, b) => b.curtidas - a.curtidas || a.em - b.em);
-
-  return Response.json({ desafio, entradas }, { headers: { "cache-control": "public, s-maxage=20, stale-while-revalidate=120" } });
+  const mod = await loadModeration(redis);
+  await settleChampions(redis, index, mod).catch(() => {});
+  const [list, campeoes] = await Promise.all([ranked(redis, week, mod), champions(redis, mod)]);
+  const entradas = list.map(({ uid: _uid, ...e }) => e);
+  return Response.json({ desafio, entradas, campeoes }, { headers: { "cache-control": "public, s-maxage=20, stale-while-revalidate=120" } });
 }
 
 export async function POST(request: Request) {
@@ -103,6 +157,7 @@ export async function POST(request: Request) {
   if (body.acao === "participar") {
     if (!token) return json({ erro: "Entre com sua conta para participar." }, 401);
     if (!token.emailVerified) return json({ erro: "Confirme seu e-mail para participar." }, 403);
+    if (await isBlocked(redis, token.uid)) return json({ erro: "Sua conta não pode participar." }, 403);
     const profile = parse<Profile>(await redis.get(K.profile(token.uid)));
     if (!profile) return json({ erro: "Crie seu perfil público primeiro (Perfil e conta → Perfil público)." }, 403);
     const times = parse<SyncData>(await redis.get(K.times(token.uid)));

@@ -15,7 +15,7 @@ export async function userIdOf(request: Request): Promise<string | null> {
 }
 
 /** Como userIdOf, mas também diz se o e-mail da conta está confirmado. */
-export async function tokenOf(request: Request): Promise<{ uid: string; emailVerified: boolean } | null> {
+export async function tokenOf(request: Request): Promise<{ uid: string; emailVerified: boolean; email: string | null } | null> {
   const token = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
   if (!token || !PROJECT_ID) return null;
   try {
@@ -26,8 +26,14 @@ export async function tokenOf(request: Request): Promise<{ uid: string; emailVer
     });
     const authTime = typeof payload.auth_time === "number" ? payload.auth_time : 0;
     if (typeof payload.sub !== "string" || !payload.sub || authTime > Date.now() / 1000 + 60) return null;
-    return { uid: payload.sub, emailVerified: payload.email_verified === true };
+    return { uid: payload.sub, emailVerified: payload.email_verified === true, email: typeof payload.email === "string" ? payload.email.toLowerCase() : null };
   } catch {
     return null;
   }
+}
+
+/** Dono do app: e-mail confirmado que está na variável ADMIN_EMAIL (pode ter vários, separados por vírgula). */
+export function isAdmin(token: { email: string | null; emailVerified: boolean } | null) {
+  const admins = (process.env.ADMIN_EMAIL ?? "").toLowerCase().split(",").map((e) => e.trim()).filter(Boolean);
+  return !!token?.email && token.emailVerified && admins.includes(token.email);
 }
