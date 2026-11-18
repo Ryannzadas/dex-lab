@@ -1,3 +1,6 @@
 {
-  "rewrites": [{ "source": "/u/:handle", "destination": "/index.html" }]
+  "rewrites": [
+    { "source": "/u/:handle", "destination": "/api/pagina?h=:handle" },
+    { "source": "/", "has": [{ "type": "query", "key": "time" }], "destination": "/api/pagina" }
+  ]
 }

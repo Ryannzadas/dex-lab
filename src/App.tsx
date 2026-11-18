@@ -5,6 +5,7 @@ import { SummaryView } from "@/components/summary";
 import { TeamTab } from "@/components/team";
 import { TeamManager } from "@/components/team-manager";
 import { Home } from "@/components/home";
+import { DesafioBadge } from "@/components/desafio";
 
 // Login (opcional) para sincronizar os times entre aparelhos; o Firebase só carrega depois que o app abre.
 const CloudRoot = lazy(() => import("@/components/cloud-root"));
@@ -181,6 +182,18 @@ export default function App() {
               ) : tab === "time" ? (
                 <div className="grid grid-cols-1 gap-6">
                   <TeamManager api={team} loaded={teamData.list} />
+                  <DesafioBadge
+                    list={teamData.list}
+                    count={team.members.length}
+                    pending={teamData.pending.length > 0}
+                    onOpen={() => {
+                      const url = new URL(window.location.href);
+                      url.searchParams.set("ver", "desafio");
+                      window.history.replaceState(window.history.state, "", url);
+                      goToTab("vitrine");
+                      window.scrollTo({ top: 0 });
+                    }}
+                  />
                   <TeamTab
                   key={team.active.id}
                   members={team.members}
@@ -196,7 +209,7 @@ export default function App() {
                 </div>
               ) : tab === "vitrine" ? (
                 <Suspense fallback={<div className="h-96" aria-hidden="true" />}>
-                  <Vitrine loginAvailable={CLOUD_ENABLED} />
+                  <Vitrine loginAvailable={CLOUD_ENABLED} teams={team} />
                 </Suspense>
               ) : tab === "pokedex" ? (
                 <Pokedex

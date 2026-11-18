@@ -23,6 +23,10 @@
   "include": [
     "api",
     "src/lib/ai-build-types.ts",
-    "src/lib/sync-merge.ts"
+    "src/lib/sync-merge.ts",
+    "src/lib/desafios.ts",
+    "src/lib/legendaries.ts",
+    "src/lib/types.ts",
+    "src/lib/games.ts"
   ]
 }

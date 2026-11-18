@@ -1,10 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
-import { ArrowIcon, CustomSelect, SectionHeading, type SelectOption } from "@/components/ui";
+import { CustomSelect, SectionHeading, type SelectOption } from "@/components/ui";
 import { useCloudSession } from "@/lib/cloud-session";
-import { gameById, GAMES } from "@/lib/games";
-import { artworkUrl, getPokemonList, pokemonName } from "@/lib/pokeapi";
-import { teamLink, type Member } from "@/lib/team";
-import { Avatar } from "./profile-dialog";
+import { GAMES } from "@/lib/games";
+import { getPokemonList, pokemonName } from "@/lib/pokeapi";
+import { challengeOfWeek } from "@/lib/desafios";
+import { teamLink, type Member, type TeamsApi } from "@/lib/team";
+import { post } from "@/lib/community";
+import { DesafioView } from "./desafio";
+import { ShowcaseCard } from "./showcase-card";
 
 type Entry = {
   id: string;
@@ -24,26 +27,63 @@ const ORDERS: { id: Order; label: string }[] = [
   { id: "recentes", label: "Recentes" },
 ];
 
-const REASONS = [
-  { id: "ofensivo", label: "Ofensivo" },
-  { id: "spam", label: "Spam" },
-  { id: "outro", label: "Outro" },
-] as const;
 
-async function post(body: object, token?: string | null) {
-  const res = await fetch("/api/vitrine", {
-    method: "POST",
-    keepalive: true,
-    headers: { "content-type": "application/json", ...(token ? { authorization: `Bearer ${token}` } : {}) },
-    body: JSON.stringify(body),
-  });
-  const data = (await res.json().catch(() => ({}))) as { erro?: string; curtido?: boolean; curtidas?: number };
-  if (!res.ok) throw new Error(data.erro ?? "Não deu agora. Tente de novo.");
-  return data;
+
+type View = "todos" | "desafio";
+
+function readView(): View {
+  return new URLSearchParams(window.location.search).get("ver") === "desafio" ? "desafio" : "todos";
 }
 
-/** Vitrine: times que as pessoas deixaram públicos no perfil. */
-export function Vitrine({ loginAvailable }: { loginAvailable: boolean }) {
+/** Vitrine: times públicos da comunidade e o desafio da semana. */
+export function Vitrine({ loginAvailable, teams }: { loginAvailable: boolean; teams: TeamsApi }) {
+  const [view, setView] = useState<View>(readView);
+  const [desafioTitle, setDesafioTitle] = useState(() => challengeOfWeek().challenge.title);
+
+  const choose = (next: View) => {
+    setView(next);
+    const url = new URL(window.location.href);
+    if (next === "desafio") url.searchParams.set("ver", "desafio");
+    else url.searchParams.delete("ver");
+    window.history.replaceState(window.history.state, "", url);
+  };
+
+  return (
+    <section>
+      <SectionHeading kicker="{ comunidade }" title="Vitrine">
+        {view === "todos"
+          ? "Times que outros treinadores deixaram públicos. Gostou de um? Use no seu Dex Lab e mude o que quiser. Para mostrar os seus, vá em Perfil e conta → Perfil público."
+          : "Toda semana, uma regra nova. Monte um time que cumpra, inscreva e veja quem leva mais curtidas até segunda."}
+      </SectionHeading>
+      <div role="tablist" aria-label="O que ver" className="mb-6 inline-flex max-w-full rounded-2xl border border-line bg-surface p-1 backdrop-blur-xl">
+        {(
+          [
+            ["todos", "Todos os times"],
+            ["desafio", `Desafio: ${desafioTitle}`],
+          ] as const
+        ).map(([id, label]) => (
+          <button
+            key={id}
+            type="button"
+            role="tab"
+            aria-selected={view === id}
+            onClick={() => choose(id)}
+            className={`truncate rounded-xl px-3.5 py-2 text-sm font-medium transition ${view === id ? "bg-ink text-bg" : "text-muted hover:text-ink"}`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+      {view === "todos" ? (
+        <AllTeams loginAvailable={loginAvailable} />
+      ) : (
+        <DesafioView loginAvailable={loginAvailable} teams={teams} onTitle={setDesafioTitle} />
+      )}
+    </section>
+  );
+}
+
+function AllTeams({ loginAvailable }: { loginAvailable: boolean }) {
   const session = useCloudSession();
   const [entries, setEntries] = useState<Entry[] | null>(null);
   const [failed, setFailed] = useState(false);
@@ -139,11 +179,7 @@ export function Vitrine({ loginAvailable }: { loginAvailable: boolean }) {
   };
 
   return (
-    <section>
-      <SectionHeading kicker="{ comunidade }" title="Vitrine">
-        Times que outros treinadores deixaram públicos. Gostou de um? Use no seu Dex Lab e mude o que quiser. Para mostrar os seus, vá em
-        Perfil e conta → Perfil público.
-      </SectionHeading>
+    <div>
 
       <div className="mb-5 flex flex-col gap-2 sm:flex-row sm:items-center">
         <div className="relative min-w-0 flex-1">
@@ -214,13 +250,18 @@ export function Vitrine({ loginAvailable }: { loginAvailable: boolean }) {
       ) : (
         <div className="grid gap-5 lg:grid-cols-2">
           {visible.map((e) => (
-            <VitrineCard
+            <ShowcaseCard
               key={e.id}
               entry={e}
               names={names}
               liked={liked.has(e.id)}
               onLike={() => void toggleLike(e)}
-              onReported={() => {
+              onUse={() => {
+                void post({ acao: "copiar", handle: e.handle, id: e.id }).catch(() => {});
+                window.location.href = teamLink(e.team);
+              }}
+              onReport={(motivo) => {
+                void post({ acao: "denunciar", handle: e.handle, id: e.id, motivo }).catch(() => {});
                 setEntries((list) => (list ?? []).filter((x) => x.id !== e.id));
                 setNotice("Obrigado. O time saiu da sua vitrine e vamos dar uma olhada.");
               }}
@@ -228,116 +269,6 @@ export function Vitrine({ loginAvailable }: { loginAvailable: boolean }) {
           ))}
         </div>
       )}
-    </section>
-  );
-}
-
-function VitrineCard({
-  entry,
-  names,
-  liked,
-  onLike,
-  onReported,
-}: {
-  entry: Entry;
-  names: Map<number, string>;
-  liked: boolean;
-  onLike: () => void;
-  onReported: () => void;
-}) {
-  const [reporting, setReporting] = useState(false);
-  const game = gameById(entry.team.game);
-
-  const use = () => {
-    void post({ acao: "copiar", handle: entry.handle, id: entry.id }).catch(() => {});
-    window.location.href = teamLink(entry.team);
-  };
-
-  const report = (motivo: string) => {
-    void post({ acao: "denunciar", handle: entry.handle, id: entry.id, motivo }).catch(() => {});
-    onReported();
-  };
-
-  return (
-    <article className="flex flex-col rounded-3xl border border-line bg-surface p-4 shadow-sm backdrop-blur-xl sm:p-5">
-      <header className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <h3 className="truncate font-display text-xl font-bold">{entry.team.name}</h3>
-          <p className="text-sm text-muted">{game ? game.label : "Time livre"}</p>
-        </div>
-        <button
-          type="button"
-          onClick={onLike}
-          aria-pressed={liked}
-          aria-label={`${liked ? "Descurtir" : "Curtir"} ${entry.team.name}. ${entry.curtidas} curtidas`}
-          className={`flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm font-semibold transition ${
-            liked ? "border-rose-500/50 bg-rose-500/10 text-rose-600 dark:text-rose-400" : "border-line hover:border-ink"
-          }`}
-        >
-          <svg viewBox="0 0 24 24" className="size-4" fill={liked ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" aria-hidden="true">
-            <path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10Z" strokeLinejoin="round" />
-          </svg>
-          <span className="font-mono">{entry.curtidas}</span>
-        </button>
-      </header>
-
-      <ul className="mt-4 grid grid-cols-3 gap-2 sm:grid-cols-6">
-        {entry.team.members.map((m, i) => {
-          const name = m.nickname || names.get(m.id) || `#${m.id}`;
-          return (
-            <li key={i} className="flex flex-col items-center rounded-2xl border border-line bg-bg/60 px-1 pt-2 pb-2">
-              <img src={artworkUrl(m.id, m.shiny)} alt="" width={80} height={80} loading="lazy" className="aspect-square w-full max-w-20 object-contain" />
-              <span className="mt-1 w-full truncate text-center text-xs font-medium" title={name}>
-                {name}
-              </span>
-            </li>
-          );
-        })}
-      </ul>
-
-      <footer className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-line pt-4">
-        <a href={`/u/${entry.handle}`} className="flex w-full min-w-0 items-center gap-2.5 rounded-full pr-2 transition hover:opacity-80 sm:w-auto sm:flex-1">
-          <Avatar user={entry} size={32} />
-          <span className="min-w-0">
-            <span className="block truncate text-sm font-semibold">{entry.name}</span>
-            <span className="block truncate font-mono text-xs text-muted">@{entry.handle}</span>
-          </span>
-        </a>
-        {entry.copias > 0 && (
-          <span className="font-mono text-xs text-muted" title="Quantas pessoas usaram este time">
-            {entry.copias} {entry.copias === 1 ? "cópia" : "cópias"}
-          </span>
-        )}
-        <button
-          type="button"
-          onClick={use}
-          className="flex items-center gap-1.5 rounded-full bg-ink px-4 py-2 text-sm font-semibold text-bg transition hover:opacity-90"
-        >
-          Usar este time <ArrowIcon />
-        </button>
-        <button
-          type="button"
-          onClick={() => setReporting((v) => !v)}
-          aria-expanded={reporting}
-          aria-label="Denunciar este time"
-          title="Denunciar"
-          className="grid size-9 place-items-center rounded-full text-muted transition hover:bg-line/60 hover:text-ink"
-        >
-          <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-            <path d="M5 21V4M5 4h11l-2 4 2 4H5" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-        </button>
-        {reporting && (
-          <div className="flex w-full flex-wrap items-center gap-1.5 rounded-2xl bg-line/40 px-3 py-2 text-sm">
-            <span className="mr-1 text-muted">Denunciar por:</span>
-            {REASONS.map((r) => (
-              <button key={r.id} type="button" onClick={() => report(r.id)} className="rounded-full border border-line px-3 py-1 font-medium transition hover:border-ink">
-                {r.label}
-              </button>
-            ))}
-          </div>
-        )}
-      </footer>
-    </article>
+    </div>
   );
 }
