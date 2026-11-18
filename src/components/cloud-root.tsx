@@ -1,12 +1,16 @@
 import { initializeApp } from "@firebase/app";
 import {
+  createUserWithEmailAndPassword,
   getAuth,
   getRedirectResult,
   GoogleAuthProvider,
   onAuthStateChanged,
+  sendPasswordResetEmail,
+  signInWithEmailAndPassword,
   signInWithPopup,
   signInWithRedirect,
   signOut,
+  updateProfile,
   type User,
 } from "@firebase/auth";
 import { useEffect, useState } from "react";
@@ -14,7 +18,7 @@ import type { TeamsApi } from "@/lib/team";
 import { CloudAccount, type CloudAuth } from "./cloud-account";
 
 /**
- * Login com Google pelo Firebase, carregado à parte depois que o app abre.
+ * Login pelo Firebase (Google ou e-mail e senha), carregado à parte depois que o app abre.
  * Só o Firebase Auth é usado; os times ficam no servidor do próprio app (/api/times).
  */
 const env = import.meta.env;
@@ -46,6 +50,15 @@ async function signInWithGoogle() {
   }
 }
 
+async function signUpWithEmail(name: string, email: string, password: string) {
+  const { user } = await createUserWithEmailAndPassword(auth, email, password);
+  if (name) {
+    await updateProfile(user, { displayName: name });
+    // O onAuthStateChanged já disparou sem o nome; recarrega para o menu mostrar o nome.
+    await user.reload();
+  }
+}
+
 export default function CloudRoot({ api }: { api: TeamsApi }) {
   const [state, setState] = useState<{ ready: boolean; user: User | null }>({ ready: false, user: null });
 
@@ -61,7 +74,15 @@ export default function CloudRoot({ api }: { api: TeamsApi }) {
       ? { uid: user.uid, name: user.displayName || user.email || "Sua conta", email: user.email, photo: user.photoURL }
       : null,
     getToken: async () => (auth.currentUser ? auth.currentUser.getIdToken() : null),
-    signIn: signInWithGoogle,
+    signInGoogle: signInWithGoogle,
+    signInEmail: async (email, password) => {
+      await signInWithEmailAndPassword(auth, email, password);
+    },
+    signUpEmail: async (name, email, password) => {
+      await signUpWithEmail(name, email, password);
+      setState({ ready: true, user: auth.currentUser });
+    },
+    resetPassword: (email) => sendPasswordResetEmail(auth, email),
     signOut: () => signOut(auth),
   };
 

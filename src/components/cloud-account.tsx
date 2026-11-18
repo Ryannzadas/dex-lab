@@ -1,13 +1,17 @@
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { isBlankTeam, mergeSync, type SyncData, type SyncTeam } from "@/lib/sync-merge";
 import type { TeamsApi } from "@/lib/team";
+import { SignInDialog } from "./sign-in-dialog";
 
 /** O que o botão de conta precisa saber do serviço de login (hoje, Firebase). */
 export type CloudAuth = {
   ready: boolean;
   user: { uid: string; name: string; email: string | null; photo: string | null } | null;
   getToken: () => Promise<string | null>;
-  signIn: () => Promise<void>;
+  signInGoogle: () => Promise<void>;
+  signInEmail: (email: string, password: string) => Promise<void>;
+  signUpEmail: (name: string, email: string, password: string) => Promise<void>;
+  resetPassword: (email: string) => Promise<void>;
   signOut: () => Promise<void>;
 };
 
@@ -32,7 +36,7 @@ const sig = (d: SyncData) => JSON.stringify(d);
 export function CloudAccount({ api, auth }: { api: TeamsApi; auth: CloudAuth }) {
   const [status, setStatus] = useState<Status>("sincronizando");
   const [open, setOpen] = useState(false);
-  const [signInError, setSignInError] = useState<string | null>(null);
+  const [signingIn, setSigningIn] = useState(false);
   const menuId = useId();
   const boxRef = useRef<HTMLSpanElement>(null);
   const apiRef = useRef(api);
@@ -136,15 +140,6 @@ export function CloudAccount({ api, auth }: { api: TeamsApi; auth: CloudAuth }) 
     };
   }, [open]);
 
-  const signIn = async () => {
-    setSignInError(null);
-    try {
-      await auth.signIn();
-    } catch {
-      setSignInError("Não deu para entrar. Tente de novo.");
-    }
-  };
-
   const signOut = async () => {
     setOpen(false);
     ready.current = false;
@@ -165,19 +160,23 @@ export function CloudAccount({ api, auth }: { api: TeamsApi; auth: CloudAuth }) 
 
   if (!auth.user) {
     return (
-      <button
-        type="button"
-        onClick={() => void signIn()}
-        title={signInError ?? "Entrar com Google para sincronizar os times entre aparelhos"}
-        aria-label={signInError ?? "Entrar com Google"}
-        className="flex shrink-0 items-center gap-1.5 rounded-xl px-2 py-2 text-xs font-medium text-muted transition-colors hover:bg-line/60 hover:text-ink sm:text-sm"
-      >
-        <svg viewBox="0 0 24 24" className={`size-4 ${signInError ? "text-red-500" : ""}`} fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-          <circle cx="12" cy="8" r="4" />
-          <path d="M4 21a8 8 0 0 1 16 0" strokeLinecap="round" />
-        </svg>
-        <span className="hidden sm:inline">Entrar</span>
-      </button>
+      <>
+        <button
+          type="button"
+          onClick={() => setSigningIn(true)}
+          title="Entrar para sincronizar os times entre aparelhos"
+          aria-label="Entrar"
+          aria-haspopup="dialog"
+          className="flex shrink-0 items-center gap-1.5 rounded-xl px-2 py-2 text-xs font-medium text-muted transition-colors hover:bg-line/60 hover:text-ink sm:text-sm"
+        >
+          <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+            <circle cx="12" cy="8" r="4" />
+            <path d="M4 21a8 8 0 0 1 16 0" strokeLinecap="round" />
+          </svg>
+          <span className="hidden sm:inline">Entrar</span>
+        </button>
+        {signingIn && <SignInDialog auth={auth} onClose={() => setSigningIn(false)} />}
+      </>
     );
   }
 
