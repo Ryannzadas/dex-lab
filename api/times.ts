@@ -1,42 +1,15 @@
-import { createRemoteJWKSet, jwtVerify } from "jose";
 import { mergeSync, type SyncData } from "../src/lib/sync-merge.js";
+import { json, PROJECT_ID, userIdOf } from "./_auth.js";
 import { getRedis } from "./_redis.js";
 
 /**
- * /api/times — times salvos na nuvem de quem entrou com a conta (login com Google pelo Firebase).
+ * /api/times — times salvos na nuvem de quem entrou com a conta (login pelo Firebase).
  * GET: devolve os times. PUT: junta os times enviados com os da nuvem e devolve o resultado.
  * DELETE: apaga tudo da nuvem. Só guarda os times, ligados ao id da conta.
  */
 
 const MAX_BODY = 400_000;
 const keyOf = (uid: string) => `dexlab:times:fb:${uid}`;
-const PROJECT_ID = process.env.VITE_FIREBASE_PROJECT_ID ?? process.env.FIREBASE_PROJECT_ID;
-
-// Chaves públicas do Google que assinam os tokens do Firebase (o jose guarda e renova sozinho).
-const GOOGLE_KEYS = createRemoteJWKSet(new URL("https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com"));
-
-function json(body: unknown, status = 200) {
-  return Response.json(body, { status, headers: { "cache-control": "no-store" } });
-}
-
-/** Confere o token do Firebase (assinatura, projeto, emissor, validade) e devolve o id da conta. */
-async function userIdOf(request: Request): Promise<string | null> {
-  const token = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
-  if (!token || !PROJECT_ID) return null;
-  try {
-    const { payload } = await jwtVerify(token, GOOGLE_KEYS, {
-      algorithms: ["RS256"],
-      issuer: `https://securetoken.google.com/${PROJECT_ID}`,
-      audience: PROJECT_ID,
-    });
-    const authTime = typeof payload.auth_time === "number" ? payload.auth_time : 0;
-    if (typeof payload.sub !== "string" || !payload.sub || authTime > Date.now() / 1000 + 60) return null;
-    return payload.sub;
-  } catch {
-    return null;
-  }
-}
-
 function readStored(raw: unknown): SyncData {
   const data = (typeof raw === "string" ? JSON.parse(raw) : raw) as Partial<SyncData> | null;
   return { teams: Array.isArray(data?.teams) ? data.teams : [], deleted: data?.deleted && typeof data.deleted === "object" ? data.deleted : {} };

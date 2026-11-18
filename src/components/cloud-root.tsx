@@ -1,15 +1,20 @@
 import { initializeApp } from "@firebase/app";
 import {
   createUserWithEmailAndPassword,
+  deleteUser,
+  EmailAuthProvider,
   getAuth,
   getRedirectResult,
   GoogleAuthProvider,
   onAuthStateChanged,
+  reauthenticateWithCredential,
+  reauthenticateWithPopup,
   sendPasswordResetEmail,
   signInWithEmailAndPassword,
   signInWithPopup,
   signInWithRedirect,
   signOut,
+  updatePassword,
   updateProfile,
   type User,
 } from "@firebase/auth";
@@ -68,10 +73,36 @@ export default function CloudRoot({ api }: { api: TeamsApi }) {
   }, []);
 
   const { user } = state;
+  // O objeto do usuário é o mesmo depois de mudar nome/foto; um estado novo força a tela a atualizar.
+  const refresh = () => setState({ ready: true, user: auth.currentUser });
+
+  /** Confirma que é a própria pessoa antes de mexer em senha ou excluir a conta. */
+  const reauth = async (password?: string) => {
+    const current = auth.currentUser;
+    if (!current) throw new Error("sem login");
+    if (current.providerData.some((p) => p.providerId === "password") && password !== undefined) {
+      await reauthenticateWithCredential(current, EmailAuthProvider.credential(current.email ?? "", password));
+    } else {
+      const provider = new GoogleAuthProvider();
+      provider.setCustomParameters({ prompt: "select_account" });
+      await reauthenticateWithPopup(current, provider);
+    }
+  };
+
   const cloud: CloudAuth = {
     ready: state.ready,
     user: user
-      ? { uid: user.uid, name: user.displayName || user.email || "Sua conta", email: user.email, photo: user.photoURL }
+      ? {
+          uid: user.uid,
+          name: user.displayName || user.email || "Sua conta",
+          displayName: user.displayName ?? "",
+          email: user.email,
+          photo: user.photoURL,
+          googlePhoto: user.providerData.find((p) => p.providerId === "google.com")?.photoURL ?? null,
+          hasPassword: user.providerData.some((p) => p.providerId === "password"),
+          hasGoogle: user.providerData.some((p) => p.providerId === "google.com"),
+          createdAt: user.metadata.creationTime ?? null,
+        }
       : null,
     getToken: async () => (auth.currentUser ? auth.currentUser.getIdToken() : null),
     signInGoogle: signInWithGoogle,
@@ -80,10 +111,27 @@ export default function CloudRoot({ api }: { api: TeamsApi }) {
     },
     signUpEmail: async (name, email, password) => {
       await signUpWithEmail(name, email, password);
-      setState({ ready: true, user: auth.currentUser });
+      refresh();
     },
     resetPassword: (email) => sendPasswordResetEmail(auth, email),
     signOut: () => signOut(auth),
+    updateProfile: async (changes) => {
+      if (!auth.currentUser) return;
+      await updateProfile(auth.currentUser, {
+        ...(changes.name !== undefined ? { displayName: changes.name || null } : {}),
+        ...(changes.photo !== undefined ? { photoURL: changes.photo } : {}),
+      });
+      refresh();
+    },
+    changePassword: async (current, next) => {
+      await reauth(current);
+      if (auth.currentUser) await updatePassword(auth.currentUser, next);
+    },
+    deleteAccount: async (password, beforeDelete) => {
+      await reauth(password);
+      await beforeDelete();
+      if (auth.currentUser) await deleteUser(auth.currentUser);
+    },
   };
 
   return <CloudAccount api={api} auth={cloud} />;

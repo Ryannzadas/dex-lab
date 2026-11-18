@@ -1,17 +1,34 @@
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { isBlankTeam, mergeSync, type SyncData, type SyncTeam } from "@/lib/sync-merge";
 import type { TeamsApi } from "@/lib/team";
+import { Avatar, ProfileDialog } from "./profile-dialog";
 import { SignInDialog } from "./sign-in-dialog";
 
 /** O que o botão de conta precisa saber do serviço de login (hoje, Firebase). */
 export type CloudAuth = {
   ready: boolean;
-  user: { uid: string; name: string; email: string | null; photo: string | null } | null;
+  user: {
+    uid: string;
+    /** Nome para mostrar (cai no e-mail se não tiver nome). */
+    name: string;
+    /** Nome como está salvo na conta (pode ser vazio). */
+    displayName: string;
+    email: string | null;
+    photo: string | null;
+    googlePhoto: string | null;
+    hasPassword: boolean;
+    hasGoogle: boolean;
+    createdAt: string | null;
+  } | null;
   getToken: () => Promise<string | null>;
   signInGoogle: () => Promise<void>;
   signInEmail: (email: string, password: string) => Promise<void>;
   signUpEmail: (name: string, email: string, password: string) => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
+  updateProfile: (changes: { name?: string; photo?: string | null }) => Promise<void>;
+  changePassword: (current: string, next: string) => Promise<void>;
+  /** Confirma a identidade (senha, ou Google se a conta não tiver senha), roda `beforeDelete` e exclui a conta. */
+  deleteAccount: (password: string | undefined, beforeDelete: () => Promise<void>) => Promise<void>;
   signOut: () => Promise<void>;
 };
 
@@ -37,6 +54,7 @@ export function CloudAccount({ api, auth }: { api: TeamsApi; auth: CloudAuth }) 
   const [status, setStatus] = useState<Status>("sincronizando");
   const [open, setOpen] = useState(false);
   const [signingIn, setSigningIn] = useState(false);
+  const [editing, setEditing] = useState(false);
   const menuId = useId();
   const boxRef = useRef<HTMLSpanElement>(null);
   const apiRef = useRef(api);
@@ -146,16 +164,6 @@ export function CloudAccount({ api, auth }: { api: TeamsApi; auth: CloudAuth }) 
     await auth.signOut();
   };
 
-  const eraseCloud = async () => {
-    if (!window.confirm("Apagar os seus times da nuvem? Eles continuam neste aparelho, mas somem dos outros.")) return;
-    try {
-      await call("DELETE");
-      await signOut();
-    } catch {
-      setStatus("erro");
-    }
-  };
-
   if (!auth.ready) return <span className="size-8 shrink-0 sm:size-9" aria-hidden="true" />;
 
   if (!auth.user) {
@@ -180,7 +188,7 @@ export function CloudAccount({ api, auth }: { api: TeamsApi; auth: CloudAuth }) 
     );
   }
 
-  const { name, email, photo } = auth.user;
+  const { name, email } = auth.user;
   const dot = status === "erro" ? "bg-red-500" : status === "sincronizando" ? "animate-pulse bg-amber-400" : "bg-emerald-500";
 
   return (
@@ -194,11 +202,7 @@ export function CloudAccount({ api, auth }: { api: TeamsApi; auth: CloudAuth }) 
         title={STATUS_LABEL[status]}
         className="relative grid size-8 place-items-center rounded-full sm:size-9"
       >
-        {photo ? (
-          <img src={photo} alt="" width={28} height={28} referrerPolicy="no-referrer" className="size-7 rounded-full" />
-        ) : (
-          <span className="grid size-7 place-items-center rounded-full bg-ink font-display text-xs font-bold text-bg">{name.charAt(0).toUpperCase()}</span>
-        )}
+        <Avatar user={auth.user} size={28} />
         <span aria-hidden="true" className={`absolute right-0 bottom-0 size-2.5 rounded-full border-2 border-surface-solid ${dot}`} />
       </button>
 
@@ -213,13 +217,32 @@ export function CloudAccount({ api, auth }: { api: TeamsApi; auth: CloudAuth }) 
             </p>
           </div>
           <div className="my-1 h-px bg-line" />
-          <button type="button" onClick={() => void eraseCloud()} className="block w-full rounded-xl px-2 py-2 text-left text-red-600 hover:bg-line/60 dark:text-red-400">
-            Apagar meus dados da nuvem
+          <button
+            type="button"
+            onClick={() => {
+              setOpen(false);
+              setEditing(true);
+            }}
+            className="block w-full rounded-xl px-2 py-2 text-left hover:bg-line/60"
+          >
+            Perfil e conta
           </button>
           <button type="button" onClick={() => void signOut()} className="block w-full rounded-xl px-2 py-2 text-left hover:bg-line/60">
             Sair
           </button>
         </div>
+      )}
+
+      {editing && (
+        <ProfileDialog
+          auth={auth}
+          user={auth.user}
+          teamIds={api.ids}
+          eraseCloudData={async () => {
+            await call("DELETE");
+          }}
+          onClose={() => setEditing(false)}
+        />
       )}
     </span>
   );

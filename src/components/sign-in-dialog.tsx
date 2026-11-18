@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, useState } from "react";
+import { messageFor } from "@/lib/auth-errors";
 import type { CloudAuth } from "./cloud-account";
 
 type Mode = "entrar" | "criar" | "esqueci";
@@ -8,31 +9,6 @@ const TITLE: Record<Mode, string> = {
   criar: "Criar conta",
   esqueci: "Recuperar senha",
 };
-
-/** Traduz os códigos de erro do Firebase para algo que dá pra entender. */
-function messageFor(error: unknown): string {
-  const code = (error as { code?: string }).code ?? "";
-  switch (code) {
-    case "auth/invalid-email":
-      return "Esse e-mail não parece certo.";
-    case "auth/invalid-credential":
-    case "auth/wrong-password":
-    case "auth/user-not-found":
-      return "E-mail ou senha incorretos. Se você entrou antes com o Google, use o botão do Google.";
-    case "auth/email-already-in-use":
-      return "Já existe uma conta com esse e-mail. Entre com ela ou use o Google.";
-    case "auth/account-exists-with-different-credential":
-      return "Esse e-mail já entra por outro jeito. Tente com e-mail e senha.";
-    case "auth/weak-password":
-      return "A senha precisa ter pelo menos 6 caracteres.";
-    case "auth/too-many-requests":
-      return "Muitas tentativas. Espere um pouco e tente de novo.";
-    case "auth/network-request-failed":
-      return "Sem conexão. Confira a internet e tente de novo.";
-    default:
-      return "Não deu para entrar. Tente de novo.";
-  }
-}
 
 const input =
   "w-full rounded-xl border border-line bg-bg px-3 py-2.5 text-base text-ink outline-none transition placeholder:text-muted/70 focus:border-ink sm:text-sm";
