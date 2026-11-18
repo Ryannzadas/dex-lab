@@ -5,6 +5,7 @@ import { getRedis } from "./_redis.js";
 
 /**
  * /api/admin — painel de moderação (só para os e-mails em ADMIN_EMAIL, confirmados).
+ * GET ?eu=1 (login): só diz se esta conta é de moderação (para mostrar o atalho no menu).
  * GET: denúncias agrupadas por time, com o time, os motivos e a situação; contas bloqueadas.
  * POST { acao, chave?, id?, handle?, uid? }:
  *   "liberar" (volta para a vitrine e não some mais com denúncias), "ocultar" (esconde de vez),
@@ -58,6 +59,11 @@ async function detailsOf(redis: Redis, r: Report) {
 }
 
 export async function GET(request: Request) {
+  if (new URL(request.url).searchParams.has("eu")) {
+    const token = await tokenOf(request);
+    if (!token) return json({ erro: "Entre com sua conta." }, 401);
+    return json({ admin: isAdmin(token) });
+  }
   const g = await guard(request);
   if (g.error) return g.error;
   const redis = g.redis;

@@ -71,6 +71,24 @@ export function CloudAccount({ api, auth }: { api: TeamsApi; auth: CloudAuth }) 
   const lastSent = useRef("");
   const ready = useRef(false);
   const uid = auth.user?.uid ?? null;
+  const verified = auth.user?.emailVerified ?? false;
+
+  // Conta de moderação? Mostra o atalho para o painel no menu.
+  const [admin, setAdmin] = useState<{ uid: string; ok: boolean } | null>(null);
+  useEffect(() => {
+    if (!uid || !verified) return;
+    let alive = true;
+    authRef.current
+      .getToken()
+      .then((token) => fetch("/api/admin?eu=1", { headers: { authorization: `Bearer ${token}` } }))
+      .then((res) => (res.ok ? (res.json() as Promise<{ admin: boolean }>) : { admin: false }))
+      .then((d) => alive && setAdmin({ uid, ok: d.admin }))
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [uid, verified]);
+  const isAdmin = !!uid && admin?.uid === uid && admin.ok;
 
   const call = useCallback(async (method: "GET" | "PUT" | "DELETE", body?: SyncData): Promise<SyncData> => {
     const token = await authRef.current.getToken();
@@ -248,6 +266,12 @@ export function CloudAccount({ api, auth }: { api: TeamsApi; auth: CloudAuth }) 
             </div>
           )}
           <div className="my-1 h-px bg-line" />
+          {isAdmin && (
+            <a href="/admin" className="flex w-full items-center justify-between rounded-xl px-2 py-2 text-left hover:bg-line/60">
+              Moderação
+              <span className="rounded-md bg-amber-400/20 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-amber-700 uppercase dark:text-amber-300">admin</span>
+            </a>
+          )}
           <button
             type="button"
             onClick={() => {
