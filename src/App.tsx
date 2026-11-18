@@ -9,11 +9,10 @@ import { DesafioBadge } from "@/components/desafio";
 
 // Login (opcional) para sincronizar os times entre aparelhos; o Firebase só carrega depois que o app abre.
 const CloudRoot = lazy(() => import("@/components/cloud-root"));
-const env = import.meta.env;
-const CLOUD_ENABLED = Boolean(env.VITE_FIREBASE_API_KEY && env.VITE_FIREBASE_AUTH_DOMAIN && env.VITE_FIREBASE_PROJECT_ID && env.VITE_FIREBASE_APP_ID);
 import { Pokedex } from "@/components/pokedex";
 const Vitrine = lazy(() => import("@/components/vitrine").then((m) => ({ default: m.Vitrine })));
 
+import { CLOUD_ENABLED } from "@/lib/cloud-session";
 import { useIdList, useTheme, type ThemeMode } from "@/lib/state";
 import { useTeams } from "@/lib/team";
 import { useGame } from "@/lib/use-game";

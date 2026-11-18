@@ -1,20 +1,28 @@
-import { useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import { Footer } from "@/App";
 import { Blobs } from "@/components/blobs";
 import { ArrowIcon } from "@/components/ui";
 import { gameById } from "@/lib/games";
 import { artworkUrl, getPokemonList, pokemonName } from "@/lib/pokeapi";
 import { useTheme } from "@/lib/state";
-import { teamLink, type Member } from "@/lib/team";
+import { CLOUD_ENABLED } from "@/lib/cloud-session";
+import { useFollowing } from "@/lib/following";
+import { teamLink, useTeams, type Member } from "@/lib/team";
+import { MatchupDialog, type OtherTeam } from "./matchup";
 import { Avatar } from "./profile-dialog";
 
 type PublicTeam = { name: string; game: string | null; members: Member[] };
-type PublicProfile = { handle: string; name: string; photo: string | null; bio: string; since: number; teams: PublicTeam[] };
+type PublicProfile = { handle: string; name: string; photo: string | null; bio: string; since: number; teams: PublicTeam[]; seguidores?: number };
+
+// Botão de conta (login), o mesmo do app; carrega à parte.
+const CloudRoot = lazy(() => import("./cloud-root"));
 type State = { status: "carregando" } | { status: "ok"; profile: PublicProfile } | { status: "nao-achou" } | { status: "erro" };
 
 /** Página pública de um treinador: dex-lab.vercel.app/u/<nome>. */
 export default function PublicProfilePage({ handle }: { handle: string }) {
   const theme = useTheme();
+  const teams = useTeams(false);
+  const [comparing, setComparing] = useState<OtherTeam | null>(null);
   const [state, setState] = useState<State>({ status: "carregando" });
   const [names, setNames] = useState<Map<number, string>>(new Map());
 
@@ -53,9 +61,18 @@ export default function PublicProfilePage({ handle }: { handle: string }) {
             <img src="/favicon.svg" alt="" width={36} height={36} className="size-8 sm:size-9" />
             <span className="font-display text-lg font-bold tracking-tight">Dex Lab</span>
           </a>
-          <a href="/" className="flex items-center gap-2 rounded-full border border-line bg-surface px-4 py-2 text-sm font-semibold shadow-sm backdrop-blur-xl transition hover:border-ink">
-            Montar meu time <ArrowIcon />
-          </a>
+          <div className="flex items-center gap-2">
+            <a href="/" className="flex items-center gap-2 rounded-full border border-line bg-surface px-4 py-2 text-sm font-semibold shadow-sm backdrop-blur-xl transition hover:border-ink">
+              Montar meu time <ArrowIcon />
+            </a>
+            {CLOUD_ENABLED && (
+              <span className="flex rounded-2xl border border-line bg-surface p-1 shadow-sm backdrop-blur-xl">
+                <Suspense fallback={<span className="size-8" aria-hidden="true" />}>
+                  <CloudRoot api={teams} />
+                </Suspense>
+              </span>
+            )}
+          </div>
         </div>
       </header>
 
@@ -104,6 +121,7 @@ export default function PublicProfilePage({ handle }: { handle: string }) {
                   ))}
                   <span className="rounded-lg border border-line bg-surface px-2.5 py-1 text-muted backdrop-blur-xl">desde {since}</span>
                 </div>
+                <FollowButton handle={profile.handle} initial={profile.seguidores ?? 0} />
               </div>
             </section>
 
@@ -113,7 +131,7 @@ export default function PublicProfilePage({ handle }: { handle: string }) {
               ) : (
                 <div className="grid gap-5 lg:grid-cols-2">
                   {profile.teams.map((team, i) => (
-                    <TeamCard key={i} team={team} names={names} />
+                    <TeamCard key={i} team={team} names={names} onCompare={() => setComparing({ name: team.name, handle: profile.handle, members: team.members })} />
                   ))}
                 </div>
               )}
@@ -122,12 +140,57 @@ export default function PublicProfilePage({ handle }: { handle: string }) {
         )}
       </main>
 
+      {comparing && <MatchupDialog mine={teams} other={comparing} onClose={() => setComparing(null)} />}
       <Footer dark={theme.dark} />
     </div>
   );
 }
 
-function TeamCard({ team, names }: { team: PublicTeam; names: Map<number, string> }) {
+function FollowButton({ handle, initial }: { handle: string; initial: number }) {
+  const { following, signedIn, toggle } = useFollowing();
+  const [count, setCount] = useState(initial);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+  const on = following.has(handle);
+
+  const click = async () => {
+    if (!signedIn) {
+      setMsg(CLOUD_ENABLED ? "Entre na sua conta (botão no canto de cima) para seguir." : "Indisponível agora.");
+      return;
+    }
+    setBusy(true);
+    setMsg(null);
+    try {
+      setCount((await toggle(handle)).seguidores);
+    } catch (e) {
+      setMsg((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="mt-4 flex flex-wrap items-center gap-3">
+      <button
+        type="button"
+        onClick={() => void click()}
+        disabled={busy}
+        aria-pressed={on}
+        className={`rounded-full px-5 py-2 text-sm font-semibold transition disabled:opacity-60 ${
+          on ? "border border-line hover:border-ink" : "bg-ink text-bg hover:opacity-90"
+        }`}
+      >
+        {on ? "Seguindo" : "Seguir"}
+      </button>
+      <span className="text-sm text-muted">
+        <b className="font-mono text-ink">{count}</b> {count === 1 ? "seguidor" : "seguidores"}
+      </span>
+      {msg && <span className="w-full text-sm text-muted">{msg}</span>}
+    </div>
+  );
+}
+
+function TeamCard({ team, names, onCompare }: { team: PublicTeam; names: Map<number, string>; onCompare: () => void }) {
   const game = gameById(team.game);
   return (
     <article className="rounded-3xl border border-line bg-surface p-4 shadow-sm backdrop-blur-xl sm:p-5">
@@ -136,12 +199,21 @@ function TeamCard({ team, names }: { team: PublicTeam; names: Map<number, string
           <h2 className="truncate font-display text-xl font-bold">{team.name}</h2>
           <p className="text-sm text-muted">{game ? game.label : "Time livre"}</p>
         </div>
-        <a
-          href={teamLink(team)}
-          className="flex shrink-0 items-center gap-1.5 rounded-full border border-line px-3.5 py-1.5 text-sm font-semibold transition hover:border-ink hover:bg-ink hover:text-bg"
-        >
-          Abrir <ArrowIcon direction="up-right" />
-        </a>
+        <div className="flex shrink-0 gap-1.5">
+          <button
+            type="button"
+            onClick={onCompare}
+            className="rounded-full border border-line px-3.5 py-1.5 text-sm font-semibold transition hover:border-ink"
+          >
+            Comparar
+          </button>
+          <a
+            href={teamLink(team)}
+            className="flex items-center gap-1.5 rounded-full border border-line px-3.5 py-1.5 text-sm font-semibold transition hover:border-ink hover:bg-ink hover:text-bg"
+          >
+            Abrir <ArrowIcon direction="up-right" />
+          </a>
+        </div>
       </header>
       <ul className="mt-4 grid grid-cols-3 gap-2 sm:grid-cols-6">
         {team.members.map((m, i) => {

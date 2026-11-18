@@ -6,6 +6,7 @@ import { challengeOfWeek, checkTeam, timeLeft } from "@/lib/desafios";
 import { getPokemonList, pokemonName, type Pokemon } from "@/lib/pokeapi";
 import { teamLink, type Member, type TeamsApi } from "@/lib/team";
 import { usePokemons } from "@/lib/use-pokemon";
+import { MatchupDialog, type OtherTeam } from "./matchup";
 import { ShowcaseCard, type ShowcaseEntry } from "./showcase-card";
 
 type Entrada = ShowcaseEntry & { em: number };
@@ -22,6 +23,7 @@ export function DesafioView({ loginAvailable, teams, onTitle }: { loginAvailable
   const [mine, setMine] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [reload, setReload] = useState(0);
+  const [comparing, setComparing] = useState<OtherTeam | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -160,6 +162,7 @@ export function DesafioView({ loginAvailable, teams, onTitle }: { loginAvailable
               names={names}
               liked={liked.has(e.id)}
               onLike={() => void like(e)}
+              onCompare={() => setComparing({ name: e.team.name, handle: e.handle, members: e.team.members })}
               onUse={() => {
                 window.location.href = teamLink(e.team);
               }}
@@ -172,6 +175,7 @@ export function DesafioView({ loginAvailable, teams, onTitle }: { loginAvailable
           ))}
         </div>
       )}
+      {comparing && <MatchupDialog mine={teams} other={comparing} onClose={() => setComparing(null)} />}
     </div>
   );
 }

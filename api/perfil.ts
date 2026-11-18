@@ -11,7 +11,7 @@ import { getRedis } from "./_redis.js";
  */
 
 export type PublicTeam = { name: string; game: string | null; members: SyncData["teams"][number]["members"] };
-export type PublicProfile = { handle: string; name: string; photo: string | null; bio: string; since: number; teams: PublicTeam[] };
+export type PublicProfile = { handle: string; name: string; photo: string | null; bio: string; since: number; teams: PublicTeam[]; seguidores: number };
 type Stored = { handle: string; name: string; photo: string | null; bio: string; teams: string[]; since: number };
 
 export const HANDLE_RE = /^[a-z0-9][a-z0-9_-]{2,19}$/;
@@ -33,13 +33,14 @@ export async function GET(request: Request) {
     const uid = await redis.get<string>(handleKey(handle));
     const stored = uid ? parse<Stored>(await redis.get(ownKey(uid))) : null;
     if (!uid || !stored) return json({ erro: "Perfil não encontrado." }, 404);
-    const times = parse<SyncData>(await redis.get(timesKey(uid)));
+    const [rawTimes, seguidores] = await Promise.all([redis.get(timesKey(uid)), redis.scard(`dexlab:seguidores:${uid}`)]);
+    const times = parse<SyncData>(rawTimes);
     const byId = new Map((times?.teams ?? []).map((t) => [t.id, t]));
     const teams: PublicTeam[] = stored.teams
       .map((id) => byId.get(id))
       .filter((t) => !!t && t.members.length > 0)
       .map((t) => ({ name: t!.name, game: t!.game ?? null, members: t!.members }));
-    const body: PublicProfile = { handle: stored.handle, name: stored.name, photo: stored.photo, bio: stored.bio, since: stored.since, teams };
+    const body: PublicProfile = { handle: stored.handle, name: stored.name, photo: stored.photo, bio: stored.bio, since: stored.since, teams, seguidores };
     return Response.json(body, { headers: { "cache-control": "public, s-maxage=30, stale-while-revalidate=300" } });
   }
 

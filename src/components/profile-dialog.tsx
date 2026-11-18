@@ -259,6 +259,7 @@ export function ProfileDialog({
           await eraseCloudData();
           await avatarApi("DELETE").catch(() => {});
           await apiCall("/api/perfil", "DELETE").catch(() => {});
+          await apiCall("/api/seguir", "DELETE").catch(() => {});
         }),
       setDangerMsg,
     );

@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
 import { CustomSelect, SectionHeading, type SelectOption } from "@/components/ui";
 import { useCloudSession } from "@/lib/cloud-session";
+import { useFollowing } from "@/lib/following";
 import { GAMES } from "@/lib/games";
 import { getPokemonList, pokemonName } from "@/lib/pokeapi";
 import { challengeOfWeek } from "@/lib/desafios";
 import { teamLink, type Member, type TeamsApi } from "@/lib/team";
 import { post } from "@/lib/community";
 import { DesafioView } from "./desafio";
+import { MatchupDialog, type OtherTeam } from "./matchup";
 import { ShowcaseCard } from "./showcase-card";
 
 type Entry = {
@@ -75,7 +77,7 @@ export function Vitrine({ loginAvailable, teams }: { loginAvailable: boolean; te
         ))}
       </div>
       {view === "todos" ? (
-        <AllTeams loginAvailable={loginAvailable} />
+        <AllTeams loginAvailable={loginAvailable} teams={teams} />
       ) : (
         <DesafioView loginAvailable={loginAvailable} teams={teams} onTitle={setDesafioTitle} />
       )}
@@ -83,7 +85,10 @@ export function Vitrine({ loginAvailable, teams }: { loginAvailable: boolean; te
   );
 }
 
-function AllTeams({ loginAvailable }: { loginAvailable: boolean }) {
+function AllTeams({ loginAvailable, teams }: { loginAvailable: boolean; teams: TeamsApi }) {
+  const { following, signedIn } = useFollowing();
+  const [onlyFollowing, setOnlyFollowing] = useState(false);
+  const [comparing, setComparing] = useState<OtherTeam | null>(null);
   const session = useCloudSession();
   const [entries, setEntries] = useState<Entry[] | null>(null);
   const [failed, setFailed] = useState(false);
@@ -139,6 +144,7 @@ function AllTeams({ loginAvailable }: { loginAvailable: boolean }) {
     const q = query.trim().toLowerCase();
     const list = (entries ?? []).filter((e) => {
       if (game && (e.team.game ?? "livre") !== game) return false;
+      if (onlyFollowing && !following.has(e.handle)) return false;
       if (!q) return true;
       return (
         e.team.name.toLowerCase().includes(q) ||
@@ -149,7 +155,7 @@ function AllTeams({ loginAvailable }: { loginAvailable: boolean }) {
     });
     const score = (e: Entry) => (order === "curtidos" ? e.curtidas : order === "recentes" ? e.atualizado : e.copias * 2 + e.curtidas);
     return list.sort((a, b) => score(b) - score(a) || b.atualizado - a.atualizado);
-  }, [entries, game, query, order, names]);
+  }, [entries, game, query, order, names, onlyFollowing, following]);
 
   const toggleLike = async (entry: Entry) => {
     if (!session) {
@@ -214,6 +220,19 @@ function AllTeams({ loginAvailable }: { loginAvailable: boolean }) {
             {o.label}
           </button>
         ))}
+        {signedIn && (
+          <button
+            type="button"
+            role="checkbox"
+            aria-checked={onlyFollowing}
+            onClick={() => setOnlyFollowing((v) => !v)}
+            className={`rounded-full border px-3.5 py-1.5 text-sm font-medium transition ${
+              onlyFollowing ? "border-ink bg-ink text-bg" : "border-dashed border-line text-muted hover:border-ink hover:text-ink"
+            }`}
+          >
+            De quem eu sigo{following.size ? ` (${following.size})` : ""}
+          </button>
+        )}
         {entries && (
           <span className="ml-auto self-center rounded-lg border border-line px-2 py-0.5 font-mono text-xs text-muted">
             {visible.length} {visible.length === 1 ? "time" : "times"}
@@ -244,7 +263,9 @@ function AllTeams({ loginAvailable }: { loginAvailable: boolean }) {
           <p className="mx-auto mt-2 max-w-md text-sm text-muted">
             {entries.length === 0
               ? "Seja o primeiro: entre na sua conta, abra Perfil e conta → Perfil público e marque os times que quer mostrar."
-              : "Tente outro jogo ou outro nome."}
+              : onlyFollowing && following.size === 0
+                ? "Você ainda não segue ninguém. Abra o perfil de um treinador (clique no nome dele) e toque em Seguir."
+                : "Tente outro jogo ou outro nome."}
           </p>
         </div>
       ) : (
@@ -256,6 +277,7 @@ function AllTeams({ loginAvailable }: { loginAvailable: boolean }) {
               names={names}
               liked={liked.has(e.id)}
               onLike={() => void toggleLike(e)}
+              onCompare={() => setComparing({ name: e.team.name, handle: e.handle, members: e.team.members })}
               onUse={() => {
                 void post({ acao: "copiar", handle: e.handle, id: e.id }).catch(() => {});
                 window.location.href = teamLink(e.team);
@@ -269,6 +291,7 @@ function AllTeams({ loginAvailable }: { loginAvailable: boolean }) {
           ))}
         </div>
       )}
+      {comparing && <MatchupDialog mine={teams} other={comparing} onClose={() => setComparing(null)} />}
     </div>
   );
 }

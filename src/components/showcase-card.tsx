@@ -28,6 +28,7 @@ export function ShowcaseCard({
   liked,
   onLike,
   onUse,
+  onCompare,
   onReport,
   rank,
 }: {
@@ -36,6 +37,8 @@ export function ShowcaseCard({
   liked: boolean;
   onLike: () => void;
   onUse: () => void;
+  /** Abre a comparação com um time meu. */
+  onCompare?: () => void;
   onReport: (motivo: string) => void;
   /** Posição no ranking do desafio (1, 2, 3...). */
   rank?: number;
@@ -104,6 +107,15 @@ export function ShowcaseCard({
           <span className="font-mono text-xs text-muted" title="Quantas pessoas usaram este time">
             {entry.copias} {entry.copias === 1 ? "cópia" : "cópias"}
           </span>
+        )}
+        {onCompare && (
+          <button
+            type="button"
+            onClick={onCompare}
+            className="rounded-full border border-line px-4 py-2 text-sm font-semibold transition hover:border-ink"
+          >
+            Comparar
+          </button>
         )}
         <button
           type="button"
