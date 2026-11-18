@@ -1,5 +1,6 @@
 import type { SyncData } from "../src/lib/sync-merge.js";
 import { json, PROJECT_ID, tokenOf } from "./_auth.js";
+import { isOffensive } from "./_filtro.js";
 import { getRedis } from "./_redis.js";
 
 /**
@@ -66,6 +67,7 @@ export async function PUT(request: Request) {
   const handle = text(body.handle, 20).toLowerCase();
   if (!HANDLE_RE.test(handle)) return json({ erro: "O nome do link precisa ter de 3 a 20 letras, números, - ou _." }, 400);
   if (RESERVED.has(handle)) return json({ erro: "Esse nome é reservado. Escolha outro." }, 409);
+  if (isOffensive(handle, text(body.bio, 160), text(body.name, 40))) return json({ erro: "Tire os palavrões do nome, do link ou do texto." }, 400);
   const photo = typeof body.photo === "string" && /^https:\/\//.test(body.photo) ? body.photo.slice(0, 500) : null;
   const teams = Array.isArray(body.teams) ? body.teams.filter((t): t is string => typeof t === "string").slice(0, 30) : [];
 

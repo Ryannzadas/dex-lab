@@ -20,6 +20,7 @@ import {
   type User,
 } from "@firebase/auth";
 import { useEffect, useState } from "react";
+import { setCloudSession } from "@/lib/cloud-session";
 import type { TeamsApi } from "@/lib/team";
 import { CloudAccount, type CloudAuth } from "./cloud-account";
 
@@ -72,7 +73,10 @@ export default function CloudRoot({ api }: { api: TeamsApi }) {
 
   useEffect(() => {
     getRedirectResult(auth).catch(() => {});
-    return onAuthStateChanged(auth, (user) => setState({ ready: true, user }));
+    return onAuthStateChanged(auth, (user) => {
+      setState({ ready: true, user });
+      setCloudSession(user ? { uid: user.uid, getToken: () => user.getIdToken() } : null);
+    });
   }, []);
 
   const { user } = state;

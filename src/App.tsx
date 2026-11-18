@@ -11,6 +11,7 @@ const CloudRoot = lazy(() => import("@/components/cloud-root"));
 const env = import.meta.env;
 const CLOUD_ENABLED = Boolean(env.VITE_FIREBASE_API_KEY && env.VITE_FIREBASE_AUTH_DOMAIN && env.VITE_FIREBASE_PROJECT_ID && env.VITE_FIREBASE_APP_ID);
 import { Pokedex } from "@/components/pokedex";
+const Vitrine = lazy(() => import("@/components/vitrine").then((m) => ({ default: m.Vitrine })));
 
 import { useIdList, useTheme, type ThemeMode } from "@/lib/state";
 import { useTeams } from "@/lib/team";
@@ -18,12 +19,12 @@ import { useGame } from "@/lib/use-game";
 import type { TypeName } from "@/lib/types";
 import { usePokemons } from "@/lib/use-pokemon";
 
-type Tab = "inicio" | "time" | "comparar" | "pokedex";
+type Tab = "inicio" | "time" | "comparar" | "pokedex" | "vitrine";
 
 function readTab(): Tab {
   const params = new URLSearchParams(window.location.search);
   const aba = params.get("aba");
-  if (aba === "comparar" || aba === "pokedex" || aba === "time") return aba;
+  if (aba === "comparar" || aba === "pokedex" || aba === "time" || aba === "vitrine") return aba;
   // Link de time compartilhado (antigo, sem aba): abre direto no time. Senão, a tela inicial.
   return params.has("time") && !aba ? "time" : "inicio";
 }
@@ -116,8 +117,10 @@ export default function App() {
   const activeTypes =
     summaryId !== null
       ? summaryTypes
-      : tab === "pokedex"
-        ? dexTypes
+      : tab === "vitrine"
+        ? []
+        : tab === "pokedex"
+          ? dexTypes
         : (tab === "time" ? teamData.list : compareData.list).flatMap((p) => p.types);
 
   return (
@@ -191,6 +194,10 @@ export default function App() {
                   game={gameCtx}
                 />
                 </div>
+              ) : tab === "vitrine" ? (
+                <Suspense fallback={<div className="h-96" aria-hidden="true" />}>
+                  <Vitrine loginAvailable={CLOUD_ENABLED} />
+                </Suspense>
               ) : tab === "pokedex" ? (
                 <Pokedex
                   onOpen={openSummary}
@@ -210,7 +217,7 @@ export default function App() {
                   onOpen={openSummary}
                 />
               )}
-              {tab !== "pokedex" && (tab === "time" ? teamData.failed : compareData.failed).length > 0 && (
+              {tab !== "pokedex" && tab !== "vitrine" && (tab === "time" ? teamData.failed : compareData.failed).length > 0 && (
                 <p className="mt-4 text-center text-sm text-red-600 dark:text-red-400" role="alert">
                   Alguns Pokémon não carregaram. Confira a conexão e recarregue a página.
                 </p>
@@ -272,6 +279,16 @@ function Toolbar({
       ),
     },
     {
+      id: "vitrine",
+      label: "Vitrine",
+      icon: (
+        <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+          <path d="M4 9.5 5.5 4h13L20 9.5M4 9.5h16M4 9.5a2.7 2.7 0 0 0 5.3 0 2.7 2.7 0 0 0 5.4 0 2.7 2.7 0 0 0 5.3 0" strokeLinejoin="round" />
+          <path d="M5.5 12.5V20h13v-7.5M10 20v-4.5h4V20" strokeLinejoin="round" />
+        </svg>
+      ),
+    },
+    {
       id: "pokedex",
       label: "Pokédex",
       icon: (
@@ -315,13 +332,13 @@ function Toolbar({
                 aria-label={t.label}
                 title={t.label}
                 onClick={() => setTab(t.id)}
-                className={`flex items-center gap-1.5 rounded-xl px-2.5 py-2 text-xs font-medium transition-colors sm:gap-2 sm:px-3 sm:text-sm ${
+                className={`flex items-center gap-1.5 rounded-xl px-2 py-2 text-xs font-medium transition-colors min-[400px]:px-2.5 sm:gap-2 sm:px-3 sm:text-sm ${
                   tab === t.id ? "min-w-0 bg-ink text-bg" : "shrink-0 text-muted hover:bg-line/60 hover:text-ink"
                 }`}
               >
                 <span className="shrink-0">{t.icon}</span>
-                {/* No celular só a aba aberta mostra o nome, para todas caberem sem cortar. */}
-                <span className={tab === t.id ? "truncate" : "hidden sm:inline"}>{t.label}</span>
+                {/* No celular só a aba aberta mostra o nome (e em telas bem estreitas, nenhuma), para todas caberem sem cortar. */}
+                <span className={tab === t.id ? "hidden truncate min-[420px]:inline" : "hidden sm:inline"}>{t.label}</span>
               </button>
             ))}
           </div>
