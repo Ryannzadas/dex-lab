@@ -1,5 +1,5 @@
 import type { SyncData } from "../src/lib/sync-merge.js";
-import { isAdmin, json, PROJECT_ID, tokenOf } from "./_auth.js";
+import { adminEmails, isAdmin, json, PROJECT_ID, tokenOf } from "./_auth.js";
 import { HIDE_AFTER_REPORTS, loadModeration, MOD } from "./_moderacao.js";
 import { getRedis } from "./_redis.js";
 
@@ -62,7 +62,8 @@ export async function GET(request: Request) {
   if (new URL(request.url).searchParams.has("eu")) {
     const token = await tokenOf(request);
     if (!token) return json({ erro: "Entre com sua conta." }, 401);
-    return json({ admin: isAdmin(token) });
+    // Diagnóstico só da própria conta: o e-mail dela, se está confirmado e se a variável chegou ao servidor.
+    return json({ admin: isAdmin(token), email: token.email, verificado: token.emailVerified, configurado: adminEmails().length > 0 });
   }
   const g = await guard(request);
   if (g.error) return g.error;

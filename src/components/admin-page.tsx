@@ -18,12 +18,16 @@ type Item = {
   detalhes: { uid: string; handle: string; name: string; bio?: string; team: string; members: number[] } | null;
 };
 type Blocked = { uid: string; handle: string; name: string; em: string };
-type State = { status: "carregando" | "proibido" | "erro" } | { status: "ok"; denuncias: Item[]; bloqueados: Blocked[] };
+type Diag = { email: string | null; verificado: boolean; configurado: boolean };
+type State = { status: "carregando" | "erro" } | { status: "proibido"; diag: Diag | null } | { status: "ok"; denuncias: Item[]; bloqueados: Blocked[] };
 
 async function fetchAdmin(session: NonNullable<CloudSession>): Promise<State> {
   try {
     const res = await fetch("/api/admin", { headers: { authorization: `Bearer ${await session.getToken()}` }, cache: "no-store" });
-    if (res.status === 403) return { status: "proibido" };
+    if (res.status === 403) {
+      const me = await fetch("/api/admin?eu=1", { headers: { authorization: `Bearer ${await session.getToken()}` }, cache: "no-store" });
+      return { status: "proibido", diag: me.ok ? ((await me.json()) as Diag) : null };
+    }
     if (!res.ok) return { status: "erro" };
     return { status: "ok", ...((await res.json()) as { denuncias: Item[]; bloqueados: Blocked[] }) };
   } catch {
@@ -112,10 +116,21 @@ export default function AdminPage() {
           {!session && <p className="text-muted">Entre com sua conta (botão no canto de cima).</p>}
           {session && state.status === "carregando" && <p className="text-muted">Carregando…</p>}
           {session && state.status === "proibido" && (
-            <p className="text-muted">
-              Esta conta não é de moderação. Confira se o e-mail dela está na variável <code className="font-mono">ADMIN_EMAIL</code> da Vercel e se
-              ele foi confirmado.
-            </p>
+            <div className="max-w-xl rounded-2xl border border-line bg-surface p-5 text-sm">
+              <p className="font-semibold">Esta conta não é de moderação.</p>
+              {state.diag && (
+                <ul className="mt-3 grid gap-1.5">
+                  <li>
+                    Conta logada: <b className="font-mono">{state.diag.email ?? "(sem e-mail)"}</b>
+                  </li>
+                  <li>E-mail confirmado: {state.diag.verificado ? "sim ✓" : "não ✗ (confirme pelo link que chegou no e-mail)"}</li>
+                  <li>
+                    Variável <code className="font-mono">ADMIN_EMAIL</code> no servidor:{" "}
+                    {state.diag.configurado ? "encontrada ✓ (mas o e-mail acima não está nela)" : "não encontrada ✗ (falta criar ou publicar de novo)"}
+                  </li>
+                </ul>
+              )}
+            </div>
           )}
           {session && state.status === "erro" && <p className="text-muted">Não deu para carregar. Tente de novo.</p>}
 

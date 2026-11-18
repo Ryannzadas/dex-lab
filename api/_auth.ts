@@ -33,7 +33,14 @@ export async function tokenOf(request: Request): Promise<{ uid: string; emailVer
 }
 
 /** Dono do app: e-mail confirmado que está na variável ADMIN_EMAIL (pode ter vários, separados por vírgula). */
+export function adminEmails() {
+  return (process.env.ADMIN_EMAIL ?? "")
+    .toLowerCase()
+    .split(/[,;\s]+/)
+    .map((e) => e.trim().replace(/^["']|["']$/g, ""))
+    .filter(Boolean);
+}
+
 export function isAdmin(token: { email: string | null; emailVerified: boolean } | null) {
-  const admins = (process.env.ADMIN_EMAIL ?? "").toLowerCase().split(",").map((e) => e.trim()).filter(Boolean);
-  return !!token?.email && token.emailVerified && admins.includes(token.email);
+  return !!token?.email && token.emailVerified && adminEmails().includes(token.email);
 }
