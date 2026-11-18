@@ -58,7 +58,7 @@ export async function GET(request: Request) {
     title = `Time com ${names.length > 1 ? `${names.slice(0, -1).join(", ")} e ${names.at(-1)}` : names[0]} · Dex Lab`;
     description = `${game ? `Time para ${game.label}. ` : ""}Abra no Dex Lab para ver fraquezas, cobertura, velocidade e dano.`;
     image = `${origin}/api/og?time=${ids.join(",")}${game ? `&jogo=${game.id}` : ""}`;
-    pageUrl = `${origin}/?${url.searchParams.toString()}`;
+    pageUrl = `${origin}/t?${url.searchParams.toString()}`;
   }
 
   const tags = [

@@ -271,7 +271,10 @@ function ShareButton({ disabled }: { disabled: boolean }) {
   const [copied, setCopied] = useState(false);
   const share = async () => {
     try {
-      await navigator.clipboard.writeText(window.location.href);
+      // Link em /t: o servidor monta a prévia com os Pokémon do time (WhatsApp, Discord...).
+      const url = new URL(window.location.href);
+      url.pathname = "/t";
+      await navigator.clipboard.writeText(url.toString());
       setCopied(true);
       setTimeout(() => setCopied(false), 1800);
     } catch {
